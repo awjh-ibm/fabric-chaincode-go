@@ -9,6 +9,7 @@ trigger:
     include:
       - master
       - release-*
+      - FAB-*
 
 variables:
   branch: $[ coalesce(variables['system.PullRequest.TargetBranch'], variables['build.SourceBranchName']) ]
