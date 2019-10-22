@@ -98,3 +98,51 @@ func isNillableType(kind reflect.Kind) bool {
 func isMarshallingType(typ reflect.Type) bool {
 	return typ.Kind() == reflect.Array || typ.Kind() == reflect.Slice || typ.Kind() == reflect.Map || typ.Kind() == reflect.Struct || (typ.Kind() == reflect.Ptr && isMarshallingType(typ.Elem()))
 }
+
+func typeMatchesInterface(toMatch reflect.Type, iface reflect.Type) error {
+	if iface.Kind() != reflect.Interface {
+		return fmt.Errorf("Type passed for interface is not an interface")
+	}
+
+	for i := 0; i < iface.NumMethod(); i++ {
+		ifaceMethod := iface.Method(i)
+		matchMethod, exists := toMatch.MethodByName(ifaceMethod.Name)
+
+		if !exists {
+			return fmt.Errorf("Missing function %s", ifaceMethod.Name)
+		}
+
+		ifaceNumIn := ifaceMethod.Type.NumIn()
+		matchNumIn := matchMethod.Type.NumIn() - 1 // skip over which the function is acting on
+
+		if ifaceNumIn != matchNumIn {
+			return fmt.Errorf("Parameter mismatch in method %s. Expected %d, got %d", ifaceMethod.Name, ifaceNumIn, matchNumIn)
+		}
+
+		for j := 0; j < ifaceNumIn; j++ {
+			ifaceIn := ifaceMethod.Type.In(j)
+			matchIn := matchMethod.Type.In(j + 1)
+
+			if ifaceIn.Kind() != matchIn.Kind() {
+				return fmt.Errorf("Parameter mismatch in method %s at parameter %d. Expected %s, got %s", ifaceMethod.Name, j, ifaceIn.Name(), matchIn.Name())
+			}
+		}
+
+		ifaceNumOut := ifaceMethod.Type.NumOut()
+		matchNumOut := matchMethod.Type.NumOut()
+		if ifaceNumOut != matchNumOut {
+			return fmt.Errorf("Return mismatch in method %s. Expected %d, got %d", ifaceMethod.Name, ifaceNumOut, matchNumOut)
+		}
+
+		for j := 0; j < ifaceNumOut; j++ {
+			ifaceOut := ifaceMethod.Type.Out(j)
+			matchOut := matchMethod.Type.Out(j)
+
+			if ifaceOut.Kind() != matchOut.Kind() {
+				return fmt.Errorf("Return mismatch in method %s at return %d. Expected %s, got %s", ifaceMethod.Name, j, ifaceOut.Name(), matchOut.Name())
+			}
+		}
+	}
+
+	return nil
+}

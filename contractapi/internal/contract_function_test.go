@@ -16,6 +16,18 @@ import (
 // HELPERS
 // ================================
 
+type TransactionInterface interface {
+	SomeFunction(string) string
+}
+
+func (tc *TransactionContext) SomeFunction(param0 string) string {
+	return ""
+}
+
+type BadTransactionInterface interface {
+	SomeOtherFunction() string
+}
+
 type simpleStruct struct {
 	Prop1 string `json:"prop1"`
 	prop2 string
@@ -25,7 +37,11 @@ func (ss *simpleStruct) GoodMethod(param1 string, param2 string) string {
 	return param1 + param2
 }
 
-func (ss *simpleStruct) GoodTransactionMethod(ctx TransactionContext, param1 string, param2 string) string {
+func (ss *simpleStruct) GoodTransactionMethod(ctx *TransactionContext, param1 string, param2 string) string {
+	return param1 + param2
+}
+
+func (ss *simpleStruct) GoodTransactionInterfaceMethod(ctx TransactionInterface, param1 string, param2 string) string {
 	return param1 + param2
 }
 
@@ -45,7 +61,15 @@ func (ss *simpleStruct) BadMethod(param1 complex64) complex64 {
 	return param1
 }
 
-func (ss *simpleStruct) BadTransactionMethod(param1 string, ctx TransactionContext) string {
+func (ss *simpleStruct) BadMethodGoodTransaction(ctx *TransactionContext, param1 complex64) complex64 {
+	return param1
+}
+
+func (ss *simpleStruct) BadTransactionMethod(param1 string, ctx *TransactionContext) string {
+	return param1
+}
+
+func (ss *simpleStruct) BadTransactionInterfaceMethod(ctx BadTransactionInterface, param1 string) string {
 	return param1
 }
 
@@ -358,19 +382,33 @@ func TestFormatArgs(t *testing.T) {
 func TestMethodToContractFunctionParams(t *testing.T) {
 	var params contractFunctionParams
 	var err error
+	var validTypeErr error
 
-	ctx := reflect.TypeOf(TransactionContext{})
+	ctx := reflect.TypeOf(new(TransactionContext))
 
 	badMethod, _ := getMethodByName(new(simpleStruct), "BadMethod")
-	validTypeErr := typeIsValid(reflect.TypeOf(complex64(1)), []reflect.Type{ctx})
+	validTypeErr = typeIsValid(reflect.TypeOf(complex64(1)), []reflect.Type{})
 	params, err = methodToContractFunctionParams(badMethod, ctx)
-	assert.EqualError(t, err, fmt.Sprintf("BadMethod contains invalid parameter type. %s", validTypeErr.Error()), "should error when type is valid fails")
-	assert.Equal(t, params, contractFunctionParams{}, "should return blank params for invalid param type")
+	assert.EqualError(t, err, fmt.Sprintf("BadMethod contains invalid parameter type. %s", validTypeErr.Error()), "should error when type is valid fails on first param")
+	assert.Equal(t, params, contractFunctionParams{}, "should return blank params for invalid first param type")
+
+	interfaceType := reflect.TypeOf((*BadTransactionInterface)(nil)).Elem()
+	badInterfaceMethod, _ := getMethodByName(new(simpleStruct), "BadTransactionInterfaceMethod")
+	matchesInterfaceErr := typeMatchesInterface(ctx, interfaceType)
+	params, err = methodToContractFunctionParams(badInterfaceMethod, ctx)
+	assert.EqualError(t, err, fmt.Sprintf("BadTransactionInterfaceMethod contains invalid transaction context interface type. Set transaction context for contract does not meet interface used in method. %s", matchesInterfaceErr.Error()), "should error when match on interface fails on first param")
+	assert.Equal(t, params, contractFunctionParams{}, "should return blank params for invalid first param type")
 
 	badCtxMethod, _ := getMethodByName(new(simpleStruct), "BadTransactionMethod")
 	params, err = methodToContractFunctionParams(badCtxMethod, ctx)
 	assert.EqualError(t, err, "Functions requiring the TransactionContext must require it as the first parameter. BadTransactionMethod takes it in as parameter 1", "should error when ctx in wrong position")
-	assert.Equal(t, params, contractFunctionParams{}, "should return blank params for invalid param type")
+	assert.Equal(t, params, contractFunctionParams{}, "should return blank params when context in wrong position")
+
+	badMethodGoodTransaction, _ := getMethodByName(new(simpleStruct), "BadMethodGoodTransaction")
+	validTypeErr = typeIsValid(reflect.TypeOf(complex64(1)), []reflect.Type{})
+	params, err = methodToContractFunctionParams(badMethodGoodTransaction, ctx)
+	assert.EqualError(t, err, fmt.Sprintf("BadMethodGoodTransaction contains invalid parameter type. %s", validTypeErr.Error()), "should error when type is valid fails but first param valid")
+	assert.Equal(t, params, contractFunctionParams{}, "should return blank params for invalid param type when first param is ctx")
 
 	goodMethod, _ := getMethodByName(new(simpleStruct), "GoodMethod")
 	params, err = methodToContractFunctionParams(goodMethod, ctx)
@@ -385,6 +423,17 @@ func TestMethodToContractFunctionParams(t *testing.T) {
 
 	goodTransactionMethod, _ := getMethodByName(new(simpleStruct), "GoodTransactionMethod")
 	params, err = methodToContractFunctionParams(goodTransactionMethod, ctx)
+	assert.Nil(t, err, "should not error for valid function")
+	assert.Equal(t, params, contractFunctionParams{
+		context: ctx,
+		fields: []reflect.Type{
+			reflect.TypeOf(""),
+			reflect.TypeOf(""),
+		},
+	}, "should return params with context when one specified")
+
+	goodTransactionInterfaceMethod, _ := getMethodByName(new(simpleStruct), "GoodTransactionInterfaceMethod")
+	params, err = methodToContractFunctionParams(goodTransactionInterfaceMethod, ctx)
 	assert.Nil(t, err, "should not error for valid function")
 	assert.Equal(t, params, contractFunctionParams{
 		context: ctx,

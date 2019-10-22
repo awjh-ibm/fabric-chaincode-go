@@ -172,13 +172,28 @@ func methodToContractFunctionParams(typeMethod reflect.Method, contextHandlerTyp
 	for i := startIndex; i < numIn; i++ {
 		inType := typeMethod.Type.In(i)
 
-		typeError := typeIsValid(inType, []reflect.Type{contextHandlerType})
+		typeError := typeIsValid(inType, nil)
+
+		isCtx := inType == contextHandlerType
+
+		if typeError != nil && !isCtx && i == startIndex && inType.Kind() == reflect.Interface {
+			invalidInterfaceTypeErr := fmt.Sprintf("%s contains invalid transaction context interface type. Set transaction context for contract does not meet interface used in method.", methodName)
+
+			err := typeMatchesInterface(contextHandlerType, inType)
+
+			if err != nil {
+				return contractFunctionParams{}, fmt.Errorf("%s %s", invalidInterfaceTypeErr, err.Error())
+			}
+
+			isCtx = true
+			typeError = nil
+		}
 
 		if typeError != nil {
 			return contractFunctionParams{}, fmt.Errorf("%s contains invalid parameter type. %s", methodName, typeError.Error())
-		} else if i != startIndex && inType == contextHandlerType {
+		} else if i != startIndex && isCtx {
 			return contractFunctionParams{}, fmt.Errorf("Functions requiring the TransactionContext must require it as the first parameter. %s takes it in as parameter %d", methodName, i-startIndex)
-		} else if inType == contextHandlerType {
+		} else if isCtx {
 			usesCtx = contextHandlerType
 		} else {
 			myContractFnParams.fields = append(myContractFnParams.fields, inType)

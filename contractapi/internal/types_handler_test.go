@@ -66,6 +66,40 @@ func (us usefulStruct) DoNothing() string {
 	return "nothing"
 }
 
+type myInterface interface {
+	SomeFunction(string, int) (string, error)
+}
+
+type structFailsParamLength struct{}
+
+func (s *structFailsParamLength) SomeFunction(param1 string) (string, error) {
+	return "", nil
+}
+
+type structFailsParamType struct{}
+
+func (s *structFailsParamType) SomeFunction(param1 string, param2 float32) (string, error) {
+	return "", nil
+}
+
+type structFailsReturnLength struct{}
+
+func (s *structFailsReturnLength) SomeFunction(param1 string, param2 int) string {
+	return ""
+}
+
+type structFailsReturnType struct{}
+
+func (s *structFailsReturnType) SomeFunction(param1 string, param2 int) (string, int) {
+	return "", 0
+}
+
+type structMeetsInterface struct{}
+
+func (s *structMeetsInterface) SomeFunction(param1 string, param2 int) (string, error) {
+	return "", nil
+}
+
 // ================================
 // TESTS
 // ================================
@@ -330,4 +364,31 @@ func TestIsMarshallingType(t *testing.T) {
 	assert.False(t, isMarshallingType(usefulStructType.Field(5).Type), "should return false for something that isnt the above")
 
 	assert.False(t, isMarshallingType(usefulStructType.Field(0).Type), "should return false for pointer to non marshalling type")
+}
+
+func TestTypeMatchesInterface(t *testing.T) {
+	var err error
+
+	interfaceType := reflect.TypeOf((*myInterface)(nil)).Elem()
+
+	err = typeMatchesInterface(reflect.TypeOf(new(BadStruct)), reflect.TypeOf(""))
+	assert.EqualError(t, err, "Type passed for interface is not an interface", "should error when type passed is not an interface")
+
+	err = typeMatchesInterface(reflect.TypeOf(new(BadStruct)), interfaceType)
+	assert.EqualError(t, err, "Missing function SomeFunction", "should error when type passed is missing required method in interface")
+
+	err = typeMatchesInterface(reflect.TypeOf(new(structFailsParamLength)), interfaceType)
+	assert.EqualError(t, err, "Parameter mismatch in method SomeFunction. Expected 2, got 1", "should error when type passed has method but different number of parameters")
+
+	err = typeMatchesInterface(reflect.TypeOf(new(structFailsParamType)), interfaceType)
+	assert.EqualError(t, err, "Parameter mismatch in method SomeFunction at parameter 1. Expected int, got float32", "should error when type passed has method but different parameter types")
+
+	err = typeMatchesInterface(reflect.TypeOf(new(structFailsReturnLength)), interfaceType)
+	assert.EqualError(t, err, "Return mismatch in method SomeFunction. Expected 2, got 1", "should error when type passed has method but different number of returns")
+
+	err = typeMatchesInterface(reflect.TypeOf(new(structFailsReturnType)), interfaceType)
+	assert.EqualError(t, err, "Return mismatch in method SomeFunction at return 1. Expected error, got int", "should error when type passed has method but different return types")
+
+	err = typeMatchesInterface(reflect.TypeOf(new(structMeetsInterface)), interfaceType)
+	assert.Nil(t, err, "should not error when struct meets interface")
 }
