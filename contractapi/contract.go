@@ -1,18 +1,28 @@
-/*
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright the Hyperledger Fabric contributors. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
 
 package contractapi
+
+// IgnoreContractInterface extends ContractInterface and provides additional functionality
+// that can be used to mark which functions should not be accessible by invoking/querying
+// chaincode
+type IgnoreContractInterface interface {
+	// GetIgnoredFunctions returns a list of function names for functions that should not
+	// be included in the produced metadata or accessible by invoking/querying the chaincode.
+	// Note these functions are still callable by the code just not directly by outside users.
+	// Those that match functions in the ChaincodeInterface are ignored by default and do not
+	// need to be included
+	GetIgnoredFunctions() []string
+}
+
+// EvaluationContractInterface extends ContractInterface and provides additional functionality
+// that can be used to improve metadata
+type EvaluationContractInterface interface {
+	// GetEvaluateTransactions returns a list of function names that should be tagged in the
+	// metadata as "evaluate" to indicate to a user of the chaincode that they should query
+	// rather than invoke these functions
+	GetEvaluateTransactions() []string
+}
 
 // ContractInterface defines functions a valid contract should have. Contracts to
 // be used in chaincode must implement this interface.
@@ -141,4 +151,12 @@ func (c *Contract) GetTransactionContextHandler() TransactionContextInterface {
 	}
 
 	return c.contextHandler
+}
+
+// GetIgnoredFunctions returns the list of functions in the default contract
+// that shouldn't be available to users invoking/querying chaincode. Note these
+// functions are still callable by the code just not directly by outside users.
+// Those that match functions in the ChaincodeInterface are ignored by default
+func (c *Contract) GetIgnoredFunctions() []string {
+	return []string{"SetVersion", "SetUnknownTransaction", "SetBeforeTransaction", "SetAfterTransaction", "SetName", "SetTransactionContextHandler"}
 }

@@ -1,20 +1,12 @@
-/*
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright the Hyperledger Fabric contributors. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
 
 package contractapi
 
 import (
+	"reflect"
+	"sort"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -27,7 +19,6 @@ import (
 func TestSetUnknownTransaction(t *testing.T) {
 	mc := myContract{}
 
-	// Should set unknown transaction
 	mc.SetUnknownTransaction(mc.ReturnsString)
 	assert.Equal(t, mc.ReturnsString(), mc.unknownTransaction.(func() string)(), "unknown transaction should have been set to value passed")
 }
@@ -35,26 +26,20 @@ func TestSetUnknownTransaction(t *testing.T) {
 func TestGetUnknownTransaction(t *testing.T) {
 	var mc myContract
 	var unknownFn interface{}
-	// Should throw an error when unknown transaction not set
+
 	mc = myContract{}
-
 	unknownFn = mc.GetUnknownTransaction()
-
 	assert.Nil(t, unknownFn, "should not return contractFunction when unknown transaction not set")
 
-	// Should return the call value of the stored unknown transaction when set
 	mc = myContract{}
-	mc.unknownTransaction = mc.ReturnsInt
-
+	mc.unknownTransaction = mc.ReturnsString
 	unknownFn = mc.GetUnknownTransaction()
-
-	assert.Equal(t, mc.ReturnsInt(), unknownFn.(func() int)(), "function returned should be same value as set for unknown transaction")
+	assert.Equal(t, mc.ReturnsString(), unknownFn.(func() string)(), "function returned should be same value as set for unknown transaction")
 }
 
 func TestSetBeforeTransaction(t *testing.T) {
 	mc := myContract{}
 
-	// Should set before transaction
 	mc.SetBeforeTransaction(mc.ReturnsString)
 	assert.Equal(t, mc.ReturnsString(), mc.beforeTransaction.(func() string)(), "before transaction should have been set to value passed")
 }
@@ -62,26 +47,20 @@ func TestSetBeforeTransaction(t *testing.T) {
 func TestGetBeforeTransaction(t *testing.T) {
 	var mc myContract
 	var beforeFn interface{}
-	// Should throw an error when before transaction not set
+
 	mc = myContract{}
-
 	beforeFn = mc.GetBeforeTransaction()
-
 	assert.Nil(t, beforeFn, "should not return contractFunction when before transaction not set")
 
-	// Should return the call value of the stored before transaction when set
 	mc = myContract{}
-	mc.beforeTransaction = mc.ReturnsInt
-
+	mc.beforeTransaction = mc.ReturnsString
 	beforeFn = mc.GetBeforeTransaction()
-
-	assert.Equal(t, mc.ReturnsInt(), beforeFn.(func() int)(), "function returned should be same value as set for before transaction")
+	assert.Equal(t, mc.ReturnsString(), beforeFn.(func() string)(), "function returned should be same value as set for before transaction")
 }
 
 func TestSetAfterTransaction(t *testing.T) {
 	mc := myContract{}
 
-	// Should set after transaction
 	mc.SetAfterTransaction(mc.ReturnsString)
 	assert.Equal(t, mc.ReturnsString(), mc.afterTransaction.(func() string)(), "after transaction should have been set to value passed")
 }
@@ -89,20 +68,15 @@ func TestSetAfterTransaction(t *testing.T) {
 func TestGetAfterTransaction(t *testing.T) {
 	var mc myContract
 	var afterFn interface{}
-	// Should throw an error when after transaction not set
+
 	mc = myContract{}
-
 	afterFn = mc.GetAfterTransaction()
-
 	assert.Nil(t, afterFn, "should not return contractFunction when after transaction not set")
 
-	// Should return the call value of the stored after transaction when set
 	mc = myContract{}
-	mc.afterTransaction = mc.ReturnsInt
-
+	mc.afterTransaction = mc.ReturnsString
 	afterFn = mc.GetAfterTransaction()
-
-	assert.Equal(t, mc.ReturnsInt(), afterFn.(func() int)(), "function returned should be same value as set for after transaction")
+	assert.Equal(t, mc.ReturnsString(), afterFn.(func() string)(), "function returned should be same value as set for after transaction")
 }
 
 func TestSetVersion(t *testing.T) {
@@ -138,22 +112,40 @@ func TestGetName(t *testing.T) {
 }
 
 func TestSetTransactionContextHandler(t *testing.T) {
-	sc := simpleTestContractWithCustomContext{}
+	mc := myContract{}
 	ctx := new(customContext)
 
-	// should set the context handler value
-	sc.SetTransactionContextHandler(ctx)
-	assert.Equal(t, sc.contextHandler, ctx, "should set contextHandler")
-	sc = simpleTestContractWithCustomContext{}
+	mc.SetTransactionContextHandler(ctx)
+	assert.Equal(t, mc.contextHandler, ctx, "should set contextHandler")
 }
 
 func TestGetTransactionContextHandler(t *testing.T) {
-	sc := simpleTestContractWithCustomContext{}
+	mc := myContract{}
 
-	// Should return default transaction context type
-	assert.Equal(t, new(TransactionContext), sc.GetTransactionContextHandler(), "should return default transaction context type when unset")
+	assert.Equal(t, new(TransactionContext), mc.GetTransactionContextHandler(), "should return default transaction context type when unset")
 
-	// Should return set transaction context type
-	sc.contextHandler = new(customContext)
-	assert.Equal(t, new(customContext), sc.GetTransactionContextHandler(), "should return custom context when set")
+	mc.contextHandler = new(customContext)
+	assert.Equal(t, new(customContext), mc.GetTransactionContextHandler(), "should return custom context when set")
+}
+
+func TestGetIgnoreFunctions(t *testing.T) {
+	mc := myContract{}
+	mcType := reflect.TypeOf(new(Contract))
+
+	contractMethods := []string{}
+
+	for i := 0; i < mcType.NumMethod(); i++ {
+		method := mcType.Method(i)
+
+		if strings.HasPrefix(method.Name, "Set") {
+			contractMethods = append(contractMethods, method.Name)
+		}
+	}
+
+	sort.Strings(contractMethods)
+
+	ignoredMethods := mc.GetIgnoredFunctions()
+	sort.Strings(ignoredMethods)
+
+	assert.Equal(t, contractMethods, ignoredMethods, "should ignore all set methods from contract")
 }

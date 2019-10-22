@@ -1,44 +1,36 @@
-/*
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright the Hyperledger Fabric contributors. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
 
 package contractapi
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"sort"
 	"strings"
 
+	"github.com/hyperledger/fabric-chaincode-go/contractapi/internal"
+	"github.com/hyperledger/fabric-chaincode-go/contractapi/internal/utils"
+	"github.com/hyperledger/fabric-chaincode-go/contractapi/metadata"
 	"github.com/hyperledger/fabric-chaincode-go/shim"
 	"github.com/hyperledger/fabric-protos-go/peer"
 )
 
 type contractChaincodeContract struct {
-	version                      string
-	functions                    map[string]*contractFunction
-	unknownTransaction           *transactionHandler
-	beforeTransaction            *transactionHandler
-	afterTransaction             *transactionHandler
-	transactionContextHandler    reflect.Type
-	transactionContextPtrHandler reflect.Type
+	version                   string
+	functions                 map[string]*internal.ContractFunction
+	unknownTransaction        *internal.TransactionHandler
+	beforeTransaction         *internal.TransactionHandler
+	afterTransaction          *internal.TransactionHandler
+	transactionContextHandler reflect.Type
 }
 
 // ContractChaincode a struct to meet the chaincode interface and provide routing of calls to contracts
 type ContractChaincode struct {
 	defaultContract string
 	contracts       map[string]contractChaincodeContract
-	metadata        ContractChaincodeMetadata
+	metadata        metadata.ContractChaincodeMetadata
 	title           string
 	version         string
 }
@@ -49,15 +41,48 @@ const SystemContractName = "org.hyperledger.fabric"
 // CreateNewChaincode creates a new chaincode using contracts passed. The function parses each
 // of the passed functions and stores details about their make-up to be used by the chaincode.
 // Public functions of the contracts are stored and are made callable in the chaincode. The function
-// will panic if contracts are invalid e.g. public functions take in illegal types. A system contract is added
+// will error if contracts are invalid e.g. public functions take in illegal types. A system contract is added
 // to the chaincode which provides functionality for getting the metadata of the chaincode. The generated
 // metadata is a JSON formatted MetadataContractChaincode containing each contract as a name and details
 // of the public functions. It also outlines version details for contracts and the chaincode. If these are blank
 // strings this is set to latest. The names for parameters do not match those used in the functions instead they are
-// recorded as param0, param1, ..., paramN. If there exists a file META-INF/chaincode/metadata.json then this
+// recorded as param0, param1, ..., paramN. If there exists a file contract-metadata/metadata.json then this
 // will overwrite the generated metadata. The contents of this file must validate against the schema.
-func CreateNewChaincode(contracts ...ContractInterface) ContractChaincode {
-	return convertC2CC(contracts...)
+func CreateNewChaincode(contracts ...ContractInterface) (ContractChaincode, error) {
+	ciMethods := getCiMethods()
+
+	cc := ContractChaincode{}
+	cc.contracts = make(map[string]contractChaincodeContract)
+
+	for _, contract := range contracts {
+		additionalExcludes := []string{}
+		if castContract, ok := contract.(IgnoreContractInterface); ok {
+			additionalExcludes = castContract.GetIgnoredFunctions()
+		}
+
+		err := cc.addContract(contract, append(ciMethods, additionalExcludes...))
+
+		if err != nil {
+			return ContractChaincode{}, err
+		}
+	}
+
+	sysC := new(SystemContract)
+	sysC.SetName(SystemContractName)
+
+	cc.addContract(sysC, append(ciMethods, sysC.GetIgnoredFunctions()...)) // should never error as system contract is good
+
+	err := cc.augmentMetadata()
+
+	if err != nil {
+		return ContractChaincode{}, err
+	}
+
+	metadataJSON, _ := json.Marshal(cc.metadata)
+
+	sysC.setMetadata(string(metadataJSON))
+
+	return cc, nil
 }
 
 // Start starts the chaincode in the fabric shim
@@ -139,7 +164,7 @@ func (cc *ContractChaincode) Invoke(stub shim.ChaincodeStubInterface) peer.Respo
 	beforeTransaction := nsContract.beforeTransaction
 
 	if beforeTransaction != nil {
-		_, _, errRes := beforeTransaction.call(ctx, nil)
+		_, _, errRes := beforeTransaction.Call(ctx, nil)
 
 		if errRes != nil {
 			return shim.Error(errRes.Error())
@@ -156,9 +181,9 @@ func (cc *ContractChaincode) Invoke(stub shim.ChaincodeStubInterface) peer.Respo
 			return shim.Error(fmt.Sprintf("Function %s not found in contract %s", fn, ns))
 		}
 
-		successReturn, successIFace, errorReturn = unknownTransaction.call(ctx, nil)
+		successReturn, successIFace, errorReturn = unknownTransaction.Call(ctx, nil)
 	} else {
-		var transactionSchema *TransactionMetadata
+		var transactionSchema *metadata.TransactionMetadata
 
 		for _, v := range cc.metadata.Contracts[ns].Transactions {
 			if v.Name == fn {
@@ -167,7 +192,7 @@ func (cc *ContractChaincode) Invoke(stub shim.ChaincodeStubInterface) peer.Respo
 			}
 		}
 
-		successReturn, successIFace, errorReturn = nsContract.functions[fn].call(ctx, transactionSchema, &cc.metadata.Components, params...)
+		successReturn, successIFace, errorReturn = nsContract.functions[fn].Call(ctx, transactionSchema, &cc.metadata.Components, params...)
 	}
 
 	if errorReturn != nil {
@@ -177,7 +202,7 @@ func (cc *ContractChaincode) Invoke(stub shim.ChaincodeStubInterface) peer.Respo
 	afterTransaction := nsContract.afterTransaction
 
 	if afterTransaction != nil {
-		_, _, errRes := afterTransaction.call(ctx, successIFace)
+		_, _, errRes := afterTransaction.Call(ctx, successIFace)
 
 		if errRes != nil {
 			return shim.Error(errRes.Error())
@@ -187,7 +212,7 @@ func (cc *ContractChaincode) Invoke(stub shim.ChaincodeStubInterface) peer.Respo
 	return shim.Success([]byte(successReturn))
 }
 
-func (cc *ContractChaincode) addContract(contract ContractInterface, excludeFuncs []string) {
+func (cc *ContractChaincode) addContract(contract ContractInterface, excludeFuncs []string) error {
 	ns := contract.GetName()
 
 	if ns == "" {
@@ -195,46 +220,79 @@ func (cc *ContractChaincode) addContract(contract ContractInterface, excludeFunc
 	}
 
 	if _, ok := cc.contracts[ns]; ok {
-		panic(fmt.Sprintf("Multiple contracts being merged into chaincode with name %s", contract.GetName()))
+		return fmt.Errorf("Multiple contracts being merged into chaincode with name %s", contract.GetName())
 	}
 
 	ccn := contractChaincodeContract{}
 	ccn.transactionContextHandler = reflect.ValueOf(contract.GetTransactionContextHandler()).Elem().Type()
-	ccn.transactionContextPtrHandler = reflect.ValueOf(contract.GetTransactionContextHandler()).Type()
-	ccn.functions = make(map[string]*contractFunction)
+	transactionContextPtrHandler := reflect.ValueOf(contract.GetTransactionContextHandler()).Type()
+	ccn.functions = make(map[string]*internal.ContractFunction)
 	ccn.version = contract.GetVersion()
 
 	if ccn.version == "" {
 		ccn.version = "latest"
 	}
 
-	scT := reflect.PtrTo(reflect.TypeOf(contract).Elem())
-	scV := reflect.ValueOf(contract).Elem().Addr()
+	contractType := reflect.PtrTo(reflect.TypeOf(contract).Elem())
+	contractValue := reflect.ValueOf(contract).Elem().Addr()
 
 	ut := contract.GetUnknownTransaction()
 
 	if ut != nil {
-		ccn.unknownTransaction = newTransactionHandler(ut, ccn.transactionContextPtrHandler, unknown)
+		var err error
+		ccn.unknownTransaction, err = internal.NewTransactionHandler(ut, transactionContextPtrHandler, internal.TransactionHandlerTypeUnknown)
+
+		if err != nil {
+			return err
+		}
 	}
 
 	bt := contract.GetBeforeTransaction()
 
 	if bt != nil {
-		ccn.beforeTransaction = newTransactionHandler(bt, ccn.transactionContextPtrHandler, before)
+		var err error
+		ccn.beforeTransaction, err = internal.NewTransactionHandler(bt, transactionContextPtrHandler, internal.TransactionHandlerTypeBefore)
+
+		if err != nil {
+			return err
+		}
 	}
 
 	at := contract.GetAfterTransaction()
 
 	if at != nil {
-		ccn.afterTransaction = newTransactionHandler(at, ccn.transactionContextPtrHandler, after)
+		var err error
+		ccn.afterTransaction, err = internal.NewTransactionHandler(at, transactionContextPtrHandler, internal.TransactionHandlerTypeAfter)
+
+		if err != nil {
+			return err
+		}
 	}
 
-	for i := 0; i < scT.NumMethod(); i++ {
-		typeMethod := scT.Method(i)
-		valueMethod := scV.Method(i)
+	evaluateMethods := []string{}
 
-		if !stringInSlice(typeMethod.Name, excludeFuncs) {
-			ccn.functions[typeMethod.Name] = newContractFunctionFromReflect(typeMethod, valueMethod, ccn.transactionContextPtrHandler)
+	if eci, ok := contract.(EvaluationContractInterface); ok {
+		evaluateMethods = eci.GetEvaluateTransactions()
+	}
+
+	for i := 0; i < contractType.NumMethod(); i++ {
+		typeMethod := contractType.Method(i)
+		valueMethod := contractValue.Method(i)
+
+		if !utils.StringInSlice(typeMethod.Name, excludeFuncs) {
+			var err error
+
+			var callType internal.CallType = internal.CallTypeSubmit
+
+			if utils.StringInSlice(typeMethod.Name, evaluateMethods) {
+				callType = internal.CallTypeEvaluate
+			}
+
+			ccn.functions[typeMethod.Name], err = internal.NewContractFunctionFromReflect(typeMethod, valueMethod, callType, transactionContextPtrHandler)
+
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -243,14 +301,16 @@ func (cc *ContractChaincode) addContract(contract ContractInterface, excludeFunc
 	if cc.defaultContract == "" {
 		cc.defaultContract = ns
 	}
+
+	return nil
 }
 
-func (cc *ContractChaincode) reflectMetadata() ContractChaincodeMetadata {
-	reflectedMetadata := ContractChaincodeMetadata{}
-	reflectedMetadata.Contracts = make(map[string]ContractMetadata)
+func (cc *ContractChaincode) reflectMetadata() metadata.ContractChaincodeMetadata {
+	reflectedMetadata := metadata.ContractChaincodeMetadata{}
+	reflectedMetadata.Contracts = make(map[string]metadata.ContractMetadata)
 	reflectedMetadata.Info.Version = cc.version
 	reflectedMetadata.Info.Title = cc.title
-	reflectedMetadata.Components.Schemas = make(map[string]ObjectMetadata)
+	reflectedMetadata.Components.Schemas = make(map[string]metadata.ObjectMetadata)
 
 	if reflectedMetadata.Info.Version == "" {
 		reflectedMetadata.Info.Version = "latest"
@@ -261,45 +321,15 @@ func (cc *ContractChaincode) reflectMetadata() ContractChaincodeMetadata {
 	}
 
 	for key, contract := range cc.contracts {
-		contractMetadata := ContractMetadata{}
+		contractMetadata := metadata.ContractMetadata{}
 		contractMetadata.Name = key
 		contractMetadata.Info.Version = contract.version
 		contractMetadata.Info.Title = key
 
 		for key, fn := range contract.functions {
-			transactionMetadata := TransactionMetadata{}
-			transactionMetadata.Name = key
-			transactionMetadata.Tag = []string{}
+			fnMetadata := fn.ReflectMetadata(key, &reflectedMetadata.Components)
 
-			if contractMetadata.Name != SystemContractName {
-				transactionMetadata.Tag = append(transactionMetadata.Tag, "submitTx")
-			}
-
-			for index, field := range fn.params.fields {
-				schema, err := getSchema(field, &reflectedMetadata.Components)
-
-				if err != nil {
-					panic(fmt.Sprintf("Failed to generate metadata. Invalid function parameter type. %s", err))
-				}
-
-				param := ParameterMetadata{}
-				param.Name = fmt.Sprintf("param%d", index)
-				param.Schema = *schema
-
-				transactionMetadata.Parameters = append(transactionMetadata.Parameters, param)
-			}
-
-			if fn.returns.success != nil {
-				schema, err := getSchema(fn.returns.success, &reflectedMetadata.Components)
-
-				if err != nil {
-					panic(fmt.Sprintf("Failed to generate metadata. Invalid function success return type. %s", err))
-				}
-
-				transactionMetadata.Returns = schema
-			}
-
-			contractMetadata.Transactions = append(contractMetadata.Transactions, transactionMetadata)
+			contractMetadata.Transactions = append(contractMetadata.Transactions, fnMetadata)
 		}
 
 		sort.Slice(contractMetadata.Transactions, func(i, j int) bool {
@@ -312,11 +342,35 @@ func (cc *ContractChaincode) reflectMetadata() ContractChaincodeMetadata {
 	return reflectedMetadata
 }
 
-func (cc *ContractChaincode) augmentMetadata() {
-	fileMetadata := readMetadataFile()
+func (cc *ContractChaincode) augmentMetadata() error {
+	fileMetadata, err := metadata.ReadMetadataFile()
+
+	if err != nil && !strings.Contains(err.Error(), "Failed to read metadata from file") {
+		return err
+	}
+
 	reflectedMetadata := cc.reflectMetadata()
 
-	fileMetadata.append(reflectedMetadata)
+	fileMetadata.Append(reflectedMetadata)
 
 	cc.metadata = fileMetadata
+
+	return nil
+}
+
+func getCiMethods() []string {
+	contractInterfaceType := reflect.TypeOf((*ContractInterface)(nil)).Elem()
+	ignoreContractInterfaceType := reflect.TypeOf((*IgnoreContractInterface)(nil)).Elem()
+	evaluateContractInterfaceType := reflect.TypeOf((*EvaluationContractInterface)(nil)).Elem()
+
+	interfaceTypes := []reflect.Type{contractInterfaceType, ignoreContractInterfaceType, evaluateContractInterfaceType}
+
+	var ciMethods []string
+	for _, interfaceType := range interfaceTypes {
+		for i := 0; i < interfaceType.NumMethod(); i++ {
+			ciMethods = append(ciMethods, interfaceType.Method(i).Name)
+		}
+	}
+
+	return ciMethods
 }

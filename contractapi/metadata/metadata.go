@@ -1,61 +1,57 @@
-/*
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// Copyright the Hyperledger Fabric contributors. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
 
-package contractapi
+package metadata
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io/ioutil"
-	"os"
+	os "os"
 	"path/filepath"
 	"reflect"
 
 	"github.com/go-openapi/spec"
 	"github.com/xeipuuv/gojsonschema"
+
+	utils "github.com/hyperledger/fabric-chaincode-go/contractapi/internal/utils"
 )
 
-const metadataFolder = "META-INF"
+const metadataFolder = "contract-metadata"
 const metadataFile = "metadata.json"
 
-// Helper for OS testing
-type osHlp interface {
+// Helpers for testing
+type osInterface interface {
 	Executable() (string, error)
 	Stat(string) (os.FileInfo, error)
+	IsNotExist(error) bool
 }
 
-type osHlpStr struct{}
+type osFront struct{}
 
-func (o osHlpStr) Executable() (string, error) {
+func (o osFront) Executable() (string, error) {
 	return os.Executable()
 }
 
-func (o osHlpStr) Stat(name string) (os.FileInfo, error) {
+func (o osFront) Stat(name string) (os.FileInfo, error) {
 	return os.Stat(name)
 }
 
-var osHelper osHlp = osHlpStr{}
+func (o osFront) IsNotExist(err error) bool {
+	return os.IsNotExist(err)
+}
+
+var osAbs osInterface = osFront{}
 
 // GetJSONSchema returns the JSON schema used for metadata
-func GetJSONSchema() string {
+func GetJSONSchema() ([]byte, error) {
 	file, err := readLocalFile("schema/schema.json")
 
 	if err != nil {
-		panic(fmt.Sprintf("Unable to read JSON schema. Error: %s", err.Error()))
+		return nil, fmt.Errorf("Unable to read JSON schema. Error: %s", err.Error())
 	}
 
-	return string(file)
+	return file, nil
 }
 
 // ParameterMetadata details about a parameter used for a transaction
@@ -99,7 +95,8 @@ type ContractChaincodeMetadata struct {
 	Components ComponentMetadata           `json:"components"`
 }
 
-func (ccm *ContractChaincodeMetadata) append(source ContractChaincodeMetadata) {
+// Append merge two sets of metadata
+func (ccm *ContractChaincodeMetadata) Append(source ContractChaincodeMetadata) {
 	if reflect.DeepEqual(ccm.Info, spec.Info{}) {
 		ccm.Info = source.Info
 	}
@@ -119,31 +116,39 @@ func (ccm *ContractChaincodeMetadata) append(source ContractChaincodeMetadata) {
 	}
 }
 
-func readMetadataFile() ContractChaincodeMetadata {
+// ReadMetadataFile return the contents of metadata file as ContractChaincodeMetadata
+func ReadMetadataFile() (ContractChaincodeMetadata, error) {
+
 	fileMetadata := ContractChaincodeMetadata{}
 
-	ex, execErr := osHelper.Executable()
+	ex, execErr := osAbs.Executable()
 	if execErr != nil {
-		return fileMetadata
+		return ContractChaincodeMetadata{}, fmt.Errorf("Failed to read metadata from file. Could not find location of executable. %s", execErr.Error())
 	}
 	exPath := filepath.Dir(ex)
 	metadataPath := filepath.Join(exPath, metadataFolder, metadataFile)
 
-	_, err := osHelper.Stat(metadataPath)
+	_, err := osAbs.Stat(metadataPath)
 
-	if os.IsNotExist(err) {
-		return fileMetadata
+	if osAbs.IsNotExist(err) {
+		return ContractChaincodeMetadata{}, errors.New("Failed to read metadata from file. Metadata file does not exist")
 	}
 
 	fileMetadata.Contracts = make(map[string]ContractMetadata)
 
-	metadataBytes, err := ioutil.ReadFile(metadataPath)
+	metadataBytes, err := ioutilAbs.ReadFile(metadataPath)
 
 	if err != nil {
-		panic(fmt.Sprintf("Failed to get existing metadata. Could not read file %s. %s", metadataPath, err))
+		return ContractChaincodeMetadata{}, fmt.Errorf("Failed to read metadata from file. Could not read file %s. %s", metadataPath, err)
 	}
 
-	schemaLoader := gojsonschema.NewBytesLoader([]byte(GetJSONSchema()))
+	jsonSchema, err := GetJSONSchema()
+
+	if err != nil {
+		return ContractChaincodeMetadata{}, fmt.Errorf("Failed to read JSON schema. %s", err.Error())
+	}
+
+	schemaLoader := gojsonschema.NewBytesLoader(jsonSchema)
 	metadataLoader := gojsonschema.NewBytesLoader(metadataBytes)
 
 	schema, _ := gojsonschema.NewSchema(schemaLoader)
@@ -151,10 +156,10 @@ func readMetadataFile() ContractChaincodeMetadata {
 	result, _ := schema.Validate(metadataLoader)
 
 	if !result.Valid() {
-		panic(fmt.Sprintf("Failed to get existing metadata. Given file did not match schema: %s", validateErrorsToString(result.Errors())))
+		return ContractChaincodeMetadata{}, fmt.Errorf("Cannot use metadata file. Given file did not match schema: %s", utils.ValidateErrorsToString(result.Errors()))
 	}
 
 	json.Unmarshal(metadataBytes, &fileMetadata)
 
-	return fileMetadata
+	return fileMetadata, nil
 }
