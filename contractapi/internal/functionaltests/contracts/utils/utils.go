@@ -11,7 +11,7 @@ import (
 // CustomTransactionContextInterface adds extra methods to basic context
 // interface to give access to callData
 type CustomTransactionContextInterface interface {
-	contractapi.BasicTransactionContextInterface
+	contractapi.TransactionContextInterface
 
 	SetCallData([]byte)
 	GetCallData() []byte

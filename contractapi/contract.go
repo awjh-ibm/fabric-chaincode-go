@@ -64,14 +64,14 @@ type ContractInterface interface {
 	// This function can return a blank string but this is undefined behaviour.
 	GetName() string
 
-	// GetTransactionContextHandler returns the TransactionContextInterface that is
+	// GetTransactionContextHandler returns the SettableTransactionContextInterface that is
 	// used by the functions of the contract. When the contract is used in creating
 	// a new chaincode this function is called and the transaction context returned
 	// is stored. When the chaincode is called via Init/Invoke a transaction context
 	// of the stored type is created and sent as a parameter to the named contract
 	// function (and before/after and unknown functions) if the function requires the
 	// context in its list of parameters.
-	GetTransactionContextHandler() TransactionContextInterface
+	GetTransactionContextHandler() SettableTransactionContextInterface
 }
 
 // Contract defines functions for setting and getting before, after and unknown transactions
@@ -82,7 +82,7 @@ type Contract struct {
 	unknownTransaction interface{}
 	beforeTransaction  interface{}
 	afterTransaction   interface{}
-	contextHandler     TransactionContextInterface
+	contextHandler     SettableTransactionContextInterface
 	name               string
 }
 
@@ -139,13 +139,13 @@ func (c *Contract) GetName() string {
 
 // SetTransactionContextHandler sets the transaction context type to be used for
 // the contract.
-func (c *Contract) SetTransactionContextHandler(ctx TransactionContextInterface) {
+func (c *Contract) SetTransactionContextHandler(ctx SettableTransactionContextInterface) {
 	c.contextHandler = ctx
 }
 
 // GetTransactionContextHandler returns the current transaction context set for
 // the contract.
-func (c *Contract) GetTransactionContextHandler() TransactionContextInterface {
+func (c *Contract) GetTransactionContextHandler() SettableTransactionContextInterface {
 	if c.contextHandler == nil {
 		return new(TransactionContext)
 	}

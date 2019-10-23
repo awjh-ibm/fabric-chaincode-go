@@ -13,7 +13,7 @@ type SimpleContract struct {
 }
 
 // Create - Initialises a key value pair with the given ID in the world state
-func (sc *SimpleContract) Create(ctx contractapi.BasicTransactionContextInterface, key string) error {
+func (sc *SimpleContract) Create(ctx contractapi.TransactionContextInterface, key string) error {
 	existing, err := ctx.GetStub().GetState(key)
 
 	if err != nil {
@@ -34,7 +34,7 @@ func (sc *SimpleContract) Create(ctx contractapi.BasicTransactionContextInterfac
 }
 
 // Update - Updates a key with given ID in the world state
-func (sc *SimpleContract) Update(ctx contractapi.BasicTransactionContextInterface, key string, value string) error {
+func (sc *SimpleContract) Update(ctx contractapi.TransactionContextInterface, key string, value string) error {
 	existing, err := ctx.GetStub().GetState(key)
 
 	if err != nil {
@@ -55,7 +55,7 @@ func (sc *SimpleContract) Update(ctx contractapi.BasicTransactionContextInterfac
 }
 
 // Read - Returns value of a key with given ID from world state as string
-func (sc *SimpleContract) Read(ctx contractapi.BasicTransactionContextInterface, key string) (string, error) {
+func (sc *SimpleContract) Read(ctx contractapi.TransactionContextInterface, key string) (string, error) {
 	existing, err := ctx.GetStub().GetState(key)
 
 	if err != nil {

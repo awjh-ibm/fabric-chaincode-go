@@ -13,6 +13,7 @@ import (
 	"github.com/hyperledger/fabric-chaincode-go/contractapi/internal"
 	"github.com/hyperledger/fabric-chaincode-go/contractapi/internal/utils"
 	"github.com/hyperledger/fabric-chaincode-go/contractapi/metadata"
+	"github.com/hyperledger/fabric-chaincode-go/pkg/cid"
 	"github.com/hyperledger/fabric-chaincode-go/shim"
 	"github.com/hyperledger/fabric-protos-go/peer"
 )
@@ -158,8 +159,11 @@ func (cc *ContractChaincode) Invoke(stub shim.ChaincodeStubInterface) peer.Respo
 	nsContract := cc.contracts[ns]
 
 	ctx := reflect.New(nsContract.transactionContextHandler)
-	ctxIface := ctx.Interface().(TransactionContextInterface)
+	ctxIface := ctx.Interface().(SettableTransactionContextInterface)
 	ctxIface.SetStub(stub)
+
+	ci, _ := cid.New(stub)
+	ctxIface.SetClientIdentity(ci)
 
 	beforeTransaction := nsContract.beforeTransaction
 
