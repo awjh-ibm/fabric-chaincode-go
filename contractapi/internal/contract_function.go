@@ -186,10 +186,9 @@ func methodToContractFunctionParams(typeMethod reflect.Method, contextHandlerTyp
 			}
 
 			isCtx = true
-			typeError = nil
 		}
 
-		if typeError != nil {
+		if typeError != nil && !isCtx {
 			return contractFunctionParams{}, fmt.Errorf("%s contains invalid parameter type. %s", methodName, typeError.Error())
 		} else if i != startIndex && isCtx {
 			return contractFunctionParams{}, fmt.Errorf("Functions requiring the TransactionContext must require it as the first parameter. %s takes it in as parameter %d", methodName, i-startIndex)
@@ -356,7 +355,7 @@ func validateAgainstSchema(toValidate map[string]interface{}, comparisonSchema s
 	result, _ := schema.Validate(toValidateLoader)
 
 	if !result.Valid() {
-		return fmt.Errorf("Value passed for parameter did not match schema: %s", utils.ValidateErrorsToString(result.Errors()))
+		return fmt.Errorf("Value passed for parameter did not match schema:\n%s", utils.ValidateErrorsToString(result.Errors()))
 	}
 
 	return nil

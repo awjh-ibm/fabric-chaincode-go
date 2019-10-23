@@ -76,14 +76,14 @@ type ContractMetadata struct {
 	Transactions []TransactionMetadata `json:"transactions"`
 }
 
-// ObjectMetadata description of an asset
+// ObjectMetadata description of a component
 type ObjectMetadata struct {
 	Properties           map[string]spec.Schema `json:"properties"`
 	Required             []string               `json:"required"`
 	AdditionalProperties bool                   `json:"additionalProperties"`
 }
 
-// ComponentMetadata does something
+// ComponentMetadata stores map of schemas of all components
 type ComponentMetadata struct {
 	Schemas map[string]ObjectMetadata `json:"schemas,omitempty"`
 }
@@ -156,7 +156,7 @@ func ReadMetadataFile() (ContractChaincodeMetadata, error) {
 	result, _ := schema.Validate(metadataLoader)
 
 	if !result.Valid() {
-		return ContractChaincodeMetadata{}, fmt.Errorf("Cannot use metadata file. Given file did not match schema: %s", utils.ValidateErrorsToString(result.Errors()))
+		return ContractChaincodeMetadata{}, fmt.Errorf("Cannot use metadata file. Given file did not match schema:\n%s", utils.ValidateErrorsToString(result.Errors()))
 	}
 
 	json.Unmarshal(metadataBytes, &fileMetadata)

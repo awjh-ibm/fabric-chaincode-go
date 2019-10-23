@@ -7,6 +7,15 @@ import (
 	"github.com/hyperledger/fabric-chaincode-go/shim"
 )
 
+// BasicTransactionContextInterface defines the interface which TransactionContext
+// meets. This can be taken by transacton functions on a contract which has not set
+// a custom transaction context to allow transaction functions to take an interface
+// to simplify unit testing.
+type BasicTransactionContextInterface interface {
+	// GetStub should provide a way to access the stub set by Init/Invoke
+	GetStub() shim.ChaincodeStubInterface
+}
+
 // TransactionContextInterface defines functions a valid transaction context
 // should have. Transaction context's set for contracts to be used in chaincode
 // must implement this interface.

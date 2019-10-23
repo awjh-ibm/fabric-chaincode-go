@@ -2,6 +2,7 @@ package internal
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -96,7 +97,7 @@ func TestNewTransactionHandler(t *testing.T) {
 
 	_, expectedErr := NewContractFunctionFromFunc(ms.BadFunction, 0, basicContextPtrType)
 	_, err = NewTransactionHandler(ms.BadFunction, basicContextPtrType, TransactionHandlerTypeAfter)
-	assert.EqualError(t, err, expectedErr.Error(), "should error when new contract function errors")
+	assert.EqualError(t, err, fmt.Sprintf("Error creating After. %s", expectedErr.Error()), "should error when new contract function errors")
 
 	th, err = NewTransactionHandler(ms.GoodBeforeUnknownAfterFunction, basicContextPtrType, TransactionHandlerTypeBefore)
 	cf, _ = NewContractFunctionFromFunc(ms.GoodBeforeUnknownAfterFunction, 0, basicContextPtrType)

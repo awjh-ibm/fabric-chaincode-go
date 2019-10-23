@@ -512,7 +512,7 @@ func TestAddContract(t *testing.T) {
 	cc.contracts = make(map[string]contractChaincodeContract)
 	mc = new(myContract)
 	mc.SetAfterTransaction(bc.BadMethod)
-	_, expectedErr = internal.NewTransactionHandler(bc.BadMethod, transactionContextPtrHandler, internal.TransactionHandlerTypeBefore)
+	_, expectedErr = internal.NewTransactionHandler(bc.BadMethod, transactionContextPtrHandler, internal.TransactionHandlerTypeAfter)
 	err = cc.addContract(mc, append(defaultExcludes, mc.GetIgnoredFunctions()...))
 	assert.EqualError(t, err, expectedErr.Error(), "should error when after transaction is bad method")
 
@@ -521,7 +521,7 @@ func TestAddContract(t *testing.T) {
 	cc.contracts = make(map[string]contractChaincodeContract)
 	mc = new(myContract)
 	mc.SetUnknownTransaction(bc.BadMethod)
-	_, expectedErr = internal.NewTransactionHandler(bc.BadMethod, transactionContextPtrHandler, internal.TransactionHandlerTypeBefore)
+	_, expectedErr = internal.NewTransactionHandler(bc.BadMethod, transactionContextPtrHandler, internal.TransactionHandlerTypeUnknown)
 	err = cc.addContract(mc, append(defaultExcludes, mc.GetIgnoredFunctions()...))
 	assert.EqualError(t, err, expectedErr.Error(), "should error when unknown transaction is bad method")
 }
@@ -541,7 +541,7 @@ func TestCreateNewChaincode(t *testing.T) {
 
 	contractChaincode, err = CreateNewChaincode(new(myContract), new(evaluateContract))
 	assert.Nil(t, err, "should not error when passed valid contracts")
-	assert.Equal(t, 3, len(contractChaincode.contracts), "shoudl add both passed contracts and system contract")
+	assert.Equal(t, 3, len(contractChaincode.contracts), "should add both passed contracts and system contract")
 	setMetadata, _, _ := contractChaincode.contracts[SystemContractName].functions["GetMetadata"].Call(reflect.ValueOf(nil), nil, nil)
 	assert.Equal(t, "{\"info\":{\"title\":\"undefined\",\"version\":\"latest\"},\"contracts\":{\"evaluateContract\":{\"info\":{\"title\":\"evaluateContract\",\"version\":\"latest\"},\"name\":\"evaluateContract\",\"transactions\":[{\"returns\":{\"type\":\"string\"},\"tag\":[\"evaluate\"],\"name\":\"ReturnsString\"}]},\"myContract\":{\"info\":{\"title\":\"myContract\",\"version\":\"latest\"},\"name\":\"myContract\",\"transactions\":[{\"returns\":{\"type\":\"string\"},\"tag\":[\"submit\"],\"name\":\"ReturnsString\"}]},\"org.hyperledger.fabric\":{\"info\":{\"title\":\"org.hyperledger.fabric\",\"version\":\"latest\"},\"name\":\"org.hyperledger.fabric\",\"transactions\":[{\"returns\":{\"type\":\"string\"},\"tag\":[\"evaluate\"],\"name\":\"GetMetadata\"}]}},\"components\":{}}", setMetadata, "should set metadata for system contract")
 }

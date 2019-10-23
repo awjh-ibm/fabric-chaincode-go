@@ -238,7 +238,7 @@ func TestReadMetadataFile(t *testing.T) {
 
 	ioutilAbs = ioUtilBadJSONTestStr{}
 	metadata, err = ReadMetadataFile()
-	assert.EqualError(t, err, "Cannot use metadata file. Given file did not match schema: 1. (root): info is required\n2. (root): contracts is required", "should error when cannot file contents do not match schema")
+	assert.EqualError(t, err, "Cannot use metadata file. Given file did not match schema:\n1. (root): info is required\n2. (root): contracts is required", "should error when cannot file contents do not match schema")
 	assert.Equal(t, ContractChaincodeMetadata{}, metadata, "should return blank metadata when file contents do not match schema")
 
 	ioutilAbs = ioUtilWorkTestStr{}
