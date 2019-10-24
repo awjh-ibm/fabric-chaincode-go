@@ -5,7 +5,7 @@ Feature: Simple Chancode Path
    Golden path of a very basic put and get chaincode
 
    Scenario: Initialise
-      Given I have created chaincode "SimpleContract"
+      Given I have created chaincode from "SimpleContract"
       Then I should be able to initialise the chaincode
 
    Scenario: Create key value pair

@@ -5,7 +5,7 @@ Feature: Complex Chaincode Golden Path
     Golden path of a chaincode which handles putting and getting an object
 
     Scenario: Initialise
-        Given I have created chaincode "ComplexContract"
+        Given I have created chaincode from "ComplexContract"
         Then I should be able to initialise the chaincode
 
     Scenario: Create complex object

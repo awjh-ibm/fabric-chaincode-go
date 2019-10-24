@@ -12,13 +12,15 @@ import (
 	"reflect"
 
 	"github.com/go-openapi/spec"
+	"github.com/hyperledger/fabric-chaincode-go/contractapi/internal/utils"
 	"github.com/xeipuuv/gojsonschema"
-
-	utils "github.com/hyperledger/fabric-chaincode-go/contractapi/internal/utils"
 )
 
-const metadataFolder = "contract-metadata"
-const metadataFile = "metadata.json"
+// MetadataFolder name of folder metadata should be placed in
+const MetadataFolder = "contract-metadata"
+
+// MetadataFile name of file metadata should be written in
+const MetadataFile = "metadata.json"
 
 // Helpers for testing
 type osInterface interface {
@@ -126,7 +128,7 @@ func ReadMetadataFile() (ContractChaincodeMetadata, error) {
 		return ContractChaincodeMetadata{}, fmt.Errorf("Failed to read metadata from file. Could not find location of executable. %s", execErr.Error())
 	}
 	exPath := filepath.Dir(ex)
-	metadataPath := filepath.Join(exPath, metadataFolder, metadataFile)
+	metadataPath := filepath.Join(exPath, MetadataFolder, MetadataFile)
 
 	_, err := osAbs.Stat(metadataPath)
 
@@ -142,24 +144,32 @@ func ReadMetadataFile() (ContractChaincodeMetadata, error) {
 		return ContractChaincodeMetadata{}, fmt.Errorf("Failed to read metadata from file. Could not read file %s. %s", metadataPath, err)
 	}
 
+	json.Unmarshal(metadataBytes, &fileMetadata)
+
+	return fileMetadata, nil
+}
+
+// ValidateAgainstSchema takes a ContractChaincodeMetadata and runs it against the
+// schema. If it does not meet the schema it returns an error detailing why
+func ValidateAgainstSchema(metadata ContractChaincodeMetadata) error {
 	jsonSchema, err := GetJSONSchema()
 
 	if err != nil {
-		return ContractChaincodeMetadata{}, fmt.Errorf("Failed to read JSON schema. %s", err.Error())
+		return fmt.Errorf("Failed to read JSON schema. %s", err.Error())
 	}
+
+	metadataBytes, _ := json.Marshal(metadata)
 
 	schemaLoader := gojsonschema.NewBytesLoader(jsonSchema)
 	metadataLoader := gojsonschema.NewBytesLoader(metadataBytes)
 
 	schema, _ := gojsonschema.NewSchema(schemaLoader)
 
-	result, _ := schema.Validate(metadataLoader)
+	result, err := schema.Validate(metadataLoader)
 
 	if !result.Valid() {
-		return ContractChaincodeMetadata{}, fmt.Errorf("Cannot use metadata file. Given file did not match schema:\n%s", utils.ValidateErrorsToString(result.Errors()))
+		return fmt.Errorf("Cannot use metadata. Metadata did not match schema:\n%s", utils.ValidateErrorsToString(result.Errors()))
 	}
 
-	json.Unmarshal(metadataBytes, &fileMetadata)
-
-	return fileMetadata, nil
+	return nil
 }

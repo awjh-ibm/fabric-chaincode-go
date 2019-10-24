@@ -283,7 +283,6 @@ func formatArgs(fn ContractFunction, ctx reflect.Value, supplementaryMetadata *m
 		}
 
 		if shouldValidate {
-
 			paramMetdata := supplementaryMetadata.Parameters[i]
 			toValidate := make(map[string]interface{})
 

@@ -5,7 +5,7 @@ Feature: Extended Simple Chancode Golden Path
    Golden path of a very basic put and get chaincode which uses a before transaction
 
    Scenario: Initialise
-      Given I have created chaincode "ExtendedSimpleContract"
+      Given I have created chaincode from "ExtendedSimpleContract"
       Then I should be able to initialise the chaincode
 
    Scenario: Create key value pair

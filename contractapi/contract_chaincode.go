@@ -357,6 +357,12 @@ func (cc *ContractChaincode) augmentMetadata() error {
 
 	fileMetadata.Append(reflectedMetadata)
 
+	err = metadata.ValidateAgainstSchema(fileMetadata)
+
+	if err != nil {
+		return err
+	}
+
 	cc.metadata = fileMetadata
 
 	return nil

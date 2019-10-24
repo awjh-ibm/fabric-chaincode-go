@@ -1,4 +1,5 @@
 @errors
+@badpaths
 Feature: Error paths
 
    Check how errors are handled by contractapi
@@ -28,7 +29,25 @@ Feature: Error paths
         Then I should receive an unsuccessful response "Error converting parameter param2. Conversion error Cannot convert passed value -10 to uint"
 
     Scenario: Users sends bad object data type
-    Given I have created and initialised chaincode "ComplexContract"
+        Given I have created and initialised chaincode "ComplexContract"
         When I submit the "NewObject" transaction
             | OBJECT_1 | {"firstname": "Andy", "contact": "Leave well alone"} | 1000 | ["red", "white", "blue"] |
-        Then I should receive an unsuccessful response "Error validating parameter param1. Value passed for parameter did not match schema:\n1. prop: name is required\n2. prop: Additional property firstname is not allowed"
+        Then I should receive an unsuccessful response "Error validating parameter param1. Value passed for parameter did not match schema:\n1. prop: Additional property firstname is not allowed\n2. prop: name is required"
+
+    Scenario: User sends data that does not match custom metadata
+        Given I am using metadata file "contracts/complexcontract/contract-metadata/metadata.json"
+        And I have created chaincode from "ComplexContract"
+        When I submit the "NewObject" transaction
+            | OBJECT_A | {"name": "Andy", "contact": "Leave well alone"} | 1000 | ["red", "white", "blue"] |
+        Then I should receive an unsuccessful response "Error validating parameter param0. Value passed for parameter did not match schema:\n1. prop: Does not match pattern '^OBJECT_\d$'"
+
+    Scenario: User configures bad metadata file
+        Given I am using metadata file "utils/bad_metadata.json"
+        Then I fail to create chaincode from "SimpleContract" 
+
+    Scenario: User sends invalid namespace to multi contract
+        Given I have created chaincode from multiple contracts
+            | SimpleContract | ComplexContract |
+        When I submit the "FakeContract:NewObject" transaction
+            | SomeValue |
+        Then I should receive an unsuccessful response "Contract not found with name FakeContract"

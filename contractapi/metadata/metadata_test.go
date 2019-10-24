@@ -33,16 +33,6 @@ func (io ioUtilBadSchemaLocationTestStr) ReadFile(filename string) ([]byte, erro
 	return []byte("{\"some\":\"json\"}"), nil
 }
 
-type ioUtilBadJSONTestStr struct{}
-
-func (io ioUtilBadJSONTestStr) ReadFile(filename string) ([]byte, error) {
-	if strings.Contains(filename, "schema/schema.json") {
-		return ioutil.ReadFile(filename)
-	}
-
-	return []byte("{\"some\":\"json\"}"), nil
-}
-
 type ioUtilWorkTestStr struct{}
 
 func (io ioUtilWorkTestStr) ReadFile(filename string) ([]byte, error) {
@@ -205,8 +195,6 @@ func TestAppend(t *testing.T) {
 }
 
 func TestReadMetadataFile(t *testing.T) {
-	// var filepath string
-	// var metadataBytes []byte
 	var metadata ContractChaincodeMetadata
 	var err error
 
@@ -230,24 +218,40 @@ func TestReadMetadataFile(t *testing.T) {
 	assert.Contains(t, err.Error(), "Failed to read metadata from file. Could not read file", "should error when cannot read file due to read error")
 	assert.Equal(t, ContractChaincodeMetadata{}, metadata, "should return blank metadata when cannot read file due to read error")
 
-	ioutilAbs = ioUtilBadSchemaLocationTestStr{}
-	metadata, err = ReadMetadataFile()
-	_, expectedErr := GetJSONSchema()
-	assert.EqualError(t, err, fmt.Sprintf("Failed to read JSON schema. %s", expectedErr.Error()), "should error when cannot read JSON schema")
-	assert.Equal(t, ContractChaincodeMetadata{}, metadata, "should return blank metadata when cannot read read JSON schema")
-
-	ioutilAbs = ioUtilBadJSONTestStr{}
-	metadata, err = ReadMetadataFile()
-	assert.EqualError(t, err, "Cannot use metadata file. Given file did not match schema:\n1. (root): info is required\n2. (root): contracts is required", "should error when cannot file contents do not match schema")
-	assert.Equal(t, ContractChaincodeMetadata{}, metadata, "should return blank metadata when file contents do not match schema")
-
 	ioutilAbs = ioUtilWorkTestStr{}
 	metadata, err = ReadMetadataFile()
 	metadataBytes := []byte("{\"info\":{\"title\":\"my contract\",\"version\":\"0.0.1\"},\"contracts\":{},\"components\":{}}")
 	expectedContractChaincodeMetadata := ContractChaincodeMetadata{}
 	json.Unmarshal(metadataBytes, &expectedContractChaincodeMetadata)
-	assert.Nil(t, err, "should not return error when can read file and matches schema")
+	assert.Nil(t, err, "should not return error when can read file")
 	assert.Equal(t, expectedContractChaincodeMetadata, metadata, "should return contract metadata that was in the file")
+
+	ioutilAbs = oldIoUtilHelper
+	osAbs = oldOsHelper
+}
+
+func TestValidateAgainstSchema(t *testing.T) {
+	var err error
+
+	oldIoUtilHelper := ioutilAbs
+	oldOsHelper := osAbs
+	osAbs = osWorkTestStr{}
+
+	metadata := ContractChaincodeMetadata{}
+
+	ioutilAbs = ioUtilBadSchemaLocationTestStr{}
+	err = ValidateAgainstSchema(metadata)
+	_, expectedErr := GetJSONSchema()
+	assert.EqualError(t, err, fmt.Sprintf("Failed to read JSON schema. %s", expectedErr.Error()), "should error when cannot read JSON schema")
+
+	ioutilAbs = ioUtilWorkTestStr{}
+
+	err = ValidateAgainstSchema(metadata)
+	assert.EqualError(t, err, "Cannot use metadata. Metadata did not match schema:\n1. contracts: Invalid type. Expected: object, given: null\n2. info: title is required\n3. info: version is required", "should error when metadata given does not match schema")
+
+	metadata, _ = ReadMetadataFile()
+	err = ValidateAgainstSchema(metadata)
+	assert.Nil(t, err, "should not error for valid metadata")
 
 	ioutilAbs = oldIoUtilHelper
 	osAbs = oldOsHelper

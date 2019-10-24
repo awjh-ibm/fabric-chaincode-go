@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"sort"
 	"strconv"
 	"strings"
 
@@ -10,6 +11,10 @@ import (
 // ValidateErrorsToString converts errors from JSON schema output into readable string
 func ValidateErrorsToString(resErrors []gojsonschema.ResultError) string {
 	toReturn := ""
+
+	sort.Slice(resErrors[:], func(i, j int) bool {
+		return resErrors[i].String() < resErrors[j].String()
+	})
 
 	for i, v := range resErrors {
 		toReturn += strconv.Itoa(i+1) + ". " + v.String() + "\n"

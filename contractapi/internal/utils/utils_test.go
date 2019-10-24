@@ -33,11 +33,11 @@ func TestValidateErrorsToString(t *testing.T) {
 		message: "some error message",
 	}
 	error2 := MyResultError{
-		message: "another error message",
+		message: "yet another error message",
 	}
 
 	assert.Equal(t, "1. some error message", ValidateErrorsToString([]gojsonschema.ResultError{error1}), "should return nicely formatted single error")
-	assert.Equal(t, "1. some error message\n2. another error message", ValidateErrorsToString([]gojsonschema.ResultError{error1, error2}), "should return nicely formatted multiple error")
+	assert.Equal(t, "1. some error message\n2. yet another error message", ValidateErrorsToString([]gojsonschema.ResultError{error1, error2}), "should return nicely formatted multiple error")
 }
 
 func TestStringInSlice(t *testing.T) {
