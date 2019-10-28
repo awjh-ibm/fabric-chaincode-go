@@ -116,6 +116,10 @@ func addComponentIfNotExists(obj reflect.Type, components *ComponentMetadata) er
 		schema.Properties[name] = *propSchema
 	}
 
+	if components.Schemas == nil {
+		components.Schemas = make(map[string]ObjectMetadata)
+	}
+
 	components.Schemas[obj.Name()] = schema
 
 	return nil

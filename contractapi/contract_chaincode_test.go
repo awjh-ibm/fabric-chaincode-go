@@ -10,8 +10,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/go-openapi/spec"
 	"github.com/hyperledger/fabric-chaincode-go/contractapi/internal"
 	"github.com/hyperledger/fabric-chaincode-go/contractapi/metadata"
+	"github.com/hyperledger/fabric-chaincode-go/contractapi/serializer"
 	"github.com/hyperledger/fabric-chaincode-go/shim"
 	"github.com/hyperledger/fabric-chaincode-go/shimtest"
 	"github.com/hyperledger/fabric-protos-go/peer"
@@ -293,6 +295,21 @@ func testCallingContractFunctions(t *testing.T, callType string) {
 	sc.SetAfterTransaction(sc.GetValInCustomContext)
 	cc, _ = CreateNewChaincode(&sc)
 	callContractFunctionAndCheckError(t, cc, []string{"goodContractCustomContext:SetValInCustomContext", "some other value"}, callType, "I wanted a standard value")
+
+	// should use transaction serializer
+	cc, _ = CreateNewChaincode(&gc)
+	cc.SetTransactionSerializer(new(mockSerializer))
+	callContractFunctionAndCheckSuccess(t, cc, []string{"goodContract:ReturnsString"}, callType, "GOODBYE WORLD")
+}
+
+type mockSerializer struct{}
+
+func (ms *mockSerializer) FromString(string, reflect.Type, *spec.Schema, *metadata.ComponentMetadata) (reflect.Value, error) {
+	return reflect.ValueOf("HELLO WORLD"), nil
+}
+
+func (ms *mockSerializer) ToString(reflect.Value, reflect.Type, *spec.Schema, *metadata.ComponentMetadata) (string, error) {
+	return "GOODBYE WORLD", nil
 }
 
 // ================================
@@ -321,6 +338,15 @@ func TestSetDefault(t *testing.T) {
 	cc.SetDefault(c)
 
 	assert.Equal(t, "some name", cc.defaultContract, "should set the default contract name")
+}
+
+func TestSetTransactionSerializer(t *testing.T) {
+	s := new(mockSerializer)
+
+	cc := ContractChaincode{}
+	cc.SetTransactionSerializer(s)
+
+	assert.Equal(t, s, cc.transactionSerializer, "should set the transaction serializer passed")
 }
 
 func TestReflectMetadata(t *testing.T) {
@@ -542,7 +568,8 @@ func TestCreateNewChaincode(t *testing.T) {
 	contractChaincode, err = CreateNewChaincode(new(myContract), new(evaluateContract))
 	assert.Nil(t, err, "should not error when passed valid contracts")
 	assert.Equal(t, 3, len(contractChaincode.contracts), "should add both passed contracts and system contract")
-	setMetadata, _, _ := contractChaincode.contracts[SystemContractName].functions["GetMetadata"].Call(reflect.ValueOf(nil), nil, nil)
+	assert.Equal(t, reflect.TypeOf(new(serializer.JSONSerializer)), reflect.TypeOf(contractChaincode.transactionSerializer), "should have set the transaction serializer")
+	setMetadata, _, _ := contractChaincode.contracts[SystemContractName].functions["GetMetadata"].Call(reflect.ValueOf(nil), nil, nil, new(serializer.JSONSerializer))
 	assert.Equal(t, "{\"info\":{\"title\":\"undefined\",\"version\":\"latest\"},\"contracts\":{\"evaluateContract\":{\"info\":{\"title\":\"evaluateContract\",\"version\":\"latest\"},\"name\":\"evaluateContract\",\"transactions\":[{\"returns\":{\"type\":\"string\"},\"tag\":[\"evaluate\"],\"name\":\"ReturnsString\"}]},\"myContract\":{\"info\":{\"title\":\"myContract\",\"version\":\"latest\"},\"name\":\"myContract\",\"transactions\":[{\"returns\":{\"type\":\"string\"},\"tag\":[\"submit\"],\"name\":\"ReturnsString\"}]},\"org.hyperledger.fabric\":{\"info\":{\"title\":\"org.hyperledger.fabric\",\"version\":\"latest\"},\"name\":\"org.hyperledger.fabric\",\"transactions\":[{\"returns\":{\"type\":\"string\"},\"tag\":[\"evaluate\"],\"name\":\"GetMetadata\"}]}},\"components\":{}}", setMetadata, "should set metadata for system contract")
 }
 

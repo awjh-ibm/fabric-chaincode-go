@@ -50,22 +50,6 @@ var uint64RefType = reflect.TypeOf(uint64(1))
 var float32RefType = reflect.TypeOf(float32(1.0))
 var float64RefType = reflect.TypeOf(1.0)
 
-type usefulStruct struct {
-	ptr      *string
-	iface    UsefulInterface
-	mp       map[string]string
-	slice    []string
-	channel  chan string
-	basic    string
-	array    [1]string
-	strct    goodStruct
-	strctPtr *goodStruct
-}
-
-func (us usefulStruct) DoNothing() string {
-	return "nothing"
-}
-
 type myInterface interface {
 	SomeFunction(string, int) (string, error)
 }
@@ -326,44 +310,6 @@ func TestTypeIsValid(t *testing.T) {
 	assert.EqualError(t, typeIsValid(badSliceType, []reflect.Type{badSliceType}), fmt.Sprintf(basicErr, badType.String(), listBasicTypes()), "should have returned error for invalid slice type")
 
 	assert.EqualError(t, typeIsValid(reflect.TypeOf(BadStruct{}), []reflect.Type{reflect.TypeOf(BadStruct2{})}), fmt.Sprintf("Type %s is not valid. Expected a struct, one of the basic types %s, an array/slice of these, or one of these additional types %s", badType.String(), listBasicTypes(), "internal.BadStruct2"), "should not return error when bad struct is passed but not in list of additional types")
-}
-
-func TestIsNillableType(t *testing.T) {
-	usefulStruct := usefulStruct{}
-	usefulStructType := reflect.TypeOf(usefulStruct)
-
-	assert.True(t, isNillableType(usefulStructType.Field(0).Type.Kind()), "should return true for pointers")
-
-	assert.True(t, isNillableType(usefulStructType.Field(1).Type.Kind()), "should return true for interfaces")
-
-	assert.True(t, isNillableType(usefulStructType.Field(2).Type.Kind()), "should return true for maps")
-
-	assert.True(t, isNillableType(usefulStructType.Field(3).Type.Kind()), "should return true for slices")
-
-	assert.True(t, isNillableType(usefulStructType.Field(4).Type.Kind()), "should return true for channels")
-
-	assert.True(t, isNillableType(usefulStructType.Method(0).Type.Kind()), "should return true for func")
-
-	assert.False(t, isNillableType(usefulStructType.Field(5).Type.Kind()), "should return false for something that isnt the above")
-}
-
-func TestIsMarshallingType(t *testing.T) {
-	usefulStruct := usefulStruct{}
-	usefulStructType := reflect.TypeOf(usefulStruct)
-
-	assert.True(t, isMarshallingType(usefulStructType.Field(6).Type), "should return true for arrays")
-
-	assert.True(t, isMarshallingType(usefulStructType.Field(3).Type), "should return true for slices")
-
-	assert.True(t, isMarshallingType(usefulStructType.Field(2).Type), "should return true for maps")
-
-	assert.True(t, isMarshallingType(usefulStructType.Field(7).Type), "should return true for structs")
-
-	assert.True(t, isMarshallingType(usefulStructType.Field(8).Type), "should return true for pointer of marshalling type")
-
-	assert.False(t, isMarshallingType(usefulStructType.Field(5).Type), "should return false for something that isnt the above")
-
-	assert.False(t, isMarshallingType(usefulStructType.Field(0).Type), "should return false for pointer to non marshalling type")
 }
 
 func TestTypeMatchesInterface(t *testing.T) {

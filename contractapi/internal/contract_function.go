@@ -4,17 +4,13 @@
 package internal
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
 
 	"github.com/go-openapi/spec"
-	"github.com/hyperledger/fabric-chaincode-go/contractapi/internal/types"
-	utils "github.com/hyperledger/fabric-chaincode-go/contractapi/internal/utils"
 	metadata "github.com/hyperledger/fabric-chaincode-go/contractapi/metadata"
-
-	"github.com/xeipuuv/gojsonschema"
+	"github.com/hyperledger/fabric-chaincode-go/contractapi/serializer"
 )
 
 type contractFunctionParams struct {
@@ -48,8 +44,8 @@ type ContractFunction struct {
 }
 
 // Call calls function in a contract using string args and handles formatting the response into useful types
-func (cf ContractFunction) Call(ctx reflect.Value, supplementaryMetadata *metadata.TransactionMetadata, components *metadata.ComponentMetadata, params ...string) (string, interface{}, error) {
-	values, err := formatArgs(cf, ctx, supplementaryMetadata, components, params)
+func (cf ContractFunction) Call(ctx reflect.Value, supplementaryMetadata *metadata.TransactionMetadata, components *metadata.ComponentMetadata, serializer serializer.TransactionSerializer, params ...string) (string, interface{}, error) {
+	values, err := formatArgs(cf, ctx, supplementaryMetadata, components, params, serializer)
 
 	if err != nil {
 		return "", nil, err
@@ -57,7 +53,7 @@ func (cf ContractFunction) Call(ctx reflect.Value, supplementaryMetadata *metada
 
 	someResp := cf.function.Call(values)
 
-	return handleResponse(someResp, cf)
+	return handleResponse(someResp, cf, serializer)
 }
 
 // ReflectMetadata returns the metadata for contract function
@@ -243,14 +239,10 @@ func methodToContractFunctionReturns(typeMethod reflect.Method) (contractFunctio
 }
 
 // Calling
-func formatArgs(fn ContractFunction, ctx reflect.Value, supplementaryMetadata *metadata.TransactionMetadata, components *metadata.ComponentMetadata, params []string) ([]reflect.Value, error) {
-	var shouldValidate bool
-
+func formatArgs(fn ContractFunction, ctx reflect.Value, supplementaryMetadata *metadata.TransactionMetadata, components *metadata.ComponentMetadata, params []string, serializer serializer.TransactionSerializer) ([]reflect.Value, error) {
 	numParams := len(fn.params.fields)
 
 	if supplementaryMetadata != nil {
-		shouldValidate = true
-
 		if len(supplementaryMetadata.Parameters) != numParams {
 			return nil, fmt.Errorf("Incorrect number of params in supplementary metadata. Expected %d, received %d", numParams, len(supplementaryMetadata.Parameters))
 		}
@@ -272,33 +264,17 @@ func formatArgs(fn ContractFunction, ctx reflect.Value, supplementaryMetadata *m
 
 		paramName := ""
 
+		var schema *spec.Schema
+
 		if supplementaryMetadata != nil {
 			paramName = " " + supplementaryMetadata.Parameters[i].Name
+			schema = &supplementaryMetadata.Parameters[i].Schema
 		}
 
-		converted, err := convertArg(fieldType, params[i])
+		converted, err := serializer.FromString(params[i], fieldType, schema, components)
 
 		if err != nil {
-			return nil, fmt.Errorf("Error converting parameter%s. %s", paramName, err.Error())
-		}
-
-		if shouldValidate {
-			paramMetdata := supplementaryMetadata.Parameters[i]
-			toValidate := make(map[string]interface{})
-
-			if fieldType.Kind() == reflect.Struct || (fieldType.Kind() == reflect.Ptr && fieldType.Elem().Kind() == reflect.Struct) {
-				structMap := make(map[string]interface{})
-				json.Unmarshal([]byte(params[i]), &structMap) // use a map for structs as schema seems to like that
-				toValidate["prop"] = structMap
-			} else {
-				toValidate["prop"] = converted.Interface()
-			}
-
-			err := validateAgainstSchema(toValidate, paramMetdata.Schema, components)
-
-			if err != nil {
-				return nil, fmt.Errorf("Error validating parameter %s. %s", paramMetdata.Name, err.Error())
-			}
+			return nil, fmt.Errorf("Error managing parameter%s. %s", paramName, err.Error())
 		}
 
 		values = append(values, converted)
@@ -307,60 +283,7 @@ func formatArgs(fn ContractFunction, ctx reflect.Value, supplementaryMetadata *m
 	return values, nil
 }
 
-func createArraySliceMapOrStruct(param string, objType reflect.Type) (reflect.Value, error) {
-	obj := reflect.New(objType)
-
-	err := json.Unmarshal([]byte(param), obj.Interface())
-
-	if err != nil {
-		return reflect.Value{}, fmt.Errorf("Value %s was not passed in expected format %s", param, objType.String())
-	}
-
-	return obj.Elem(), nil
-}
-
-func convertArg(fieldType reflect.Type, paramValue string) (reflect.Value, error) {
-	var converted reflect.Value
-
-	var err error
-	if fieldType.Kind() == reflect.Array || fieldType.Kind() == reflect.Slice || fieldType.Kind() == reflect.Map || fieldType.Kind() == reflect.Struct || (fieldType.Kind() == reflect.Ptr && fieldType.Elem().Kind() == reflect.Struct) {
-		converted, err = createArraySliceMapOrStruct(paramValue, fieldType)
-	} else {
-		converted, err = types.BasicTypes[fieldType.Kind()].Convert(paramValue)
-	}
-
-	if err != nil {
-		return reflect.Value{}, fmt.Errorf("Conversion error %s", err.Error())
-	}
-
-	return converted, nil
-}
-
-func validateAgainstSchema(toValidate map[string]interface{}, comparisonSchema spec.Schema, components *metadata.ComponentMetadata) error {
-	combined := make(map[string]interface{})
-	combined["components"] = components
-	combined["properties"] = make(map[string]interface{})
-	combined["properties"].(map[string]interface{})["prop"] = comparisonSchema
-
-	combinedLoader := gojsonschema.NewGoLoader(combined)
-	toValidateLoader := gojsonschema.NewGoLoader(toValidate)
-
-	schema, err := gojsonschema.NewSchema(combinedLoader)
-
-	if err != nil {
-		return fmt.Errorf("Invalid schema for parameter: %s", err.Error())
-	}
-
-	result, _ := schema.Validate(toValidateLoader)
-
-	if !result.Valid() {
-		return fmt.Errorf("Value passed for parameter did not match schema:\n%s", utils.ValidateErrorsToString(result.Errors()))
-	}
-
-	return nil
-}
-
-func handleResponse(response []reflect.Value, function ContractFunction) (string, interface{}, error) {
+func handleResponse(response []reflect.Value, function ContractFunction, serializer serializer.TransactionSerializer) (string, interface{}, error) {
 	expectedLength := 0
 
 	returnsSuccess := function.returns.success != nil
@@ -390,12 +313,12 @@ func handleResponse(response []reflect.Value, function ContractFunction) (string
 		var iface interface{}
 
 		if successResponse.IsValid() {
-			if !isNillableType(successResponse.Kind()) || !successResponse.IsNil() {
-				if isMarshallingType(function.returns.success) || function.returns.success.Kind() == reflect.Interface && isMarshallingType(successResponse.Type()) {
-					bytes, _ := json.Marshal(successResponse.Interface())
-					successString = string(bytes)
-				} else {
-					successString = fmt.Sprint(successResponse.Interface())
+			if serializer != nil {
+				var err error
+				successString, err = serializer.ToString(successResponse, function.returns.success, nil, nil)
+
+				if err != nil {
+					return "", nil, fmt.Errorf("Error handling success response. %s", err.Error())
 				}
 			}
 

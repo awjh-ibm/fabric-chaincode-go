@@ -91,14 +91,6 @@ func typeIsValid(t reflect.Type, additionalTypes []reflect.Type) error {
 	return nil
 }
 
-func isNillableType(kind reflect.Kind) bool {
-	return kind == reflect.Ptr || kind == reflect.Interface || kind == reflect.Map || kind == reflect.Slice || kind == reflect.Chan || kind == reflect.Func
-}
-
-func isMarshallingType(typ reflect.Type) bool {
-	return typ.Kind() == reflect.Array || typ.Kind() == reflect.Slice || typ.Kind() == reflect.Map || typ.Kind() == reflect.Struct || (typ.Kind() == reflect.Ptr && isMarshallingType(typ.Elem()))
-}
-
 func typeMatchesInterface(toMatch reflect.Type, iface reflect.Type) error {
 	if iface.Kind() != reflect.Interface {
 		return fmt.Errorf("Type passed for interface is not an interface")

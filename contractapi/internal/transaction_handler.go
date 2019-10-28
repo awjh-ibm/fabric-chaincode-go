@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/hyperledger/fabric-chaincode-go/contractapi/serializer"
 	"github.com/hyperledger/fabric-chaincode-go/contractapi/utils"
 )
 
@@ -44,7 +45,7 @@ type TransactionHandler struct {
 }
 
 // Call calls tranaction function using string args and handles formatting the response into useful types
-func (th TransactionHandler) Call(ctx reflect.Value, data interface{}) (string, interface{}, error) {
+func (th TransactionHandler) Call(ctx reflect.Value, data interface{}, serializer serializer.TransactionSerializer) (string, interface{}, error) {
 	values := []reflect.Value{}
 
 	if th.params.context != nil {
@@ -61,7 +62,7 @@ func (th TransactionHandler) Call(ctx reflect.Value, data interface{}) (string, 
 
 	someResp := th.function.Call(values)
 
-	return handleResponse(someResp, th.ContractFunction)
+	return handleResponse(someResp, th.ContractFunction, serializer)
 }
 
 // NewTransactionHandler create a new transaction handler from a given function

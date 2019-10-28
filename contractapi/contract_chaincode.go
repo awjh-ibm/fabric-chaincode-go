@@ -13,6 +13,7 @@ import (
 	"github.com/hyperledger/fabric-chaincode-go/contractapi/internal"
 	"github.com/hyperledger/fabric-chaincode-go/contractapi/internal/utils"
 	"github.com/hyperledger/fabric-chaincode-go/contractapi/metadata"
+	"github.com/hyperledger/fabric-chaincode-go/contractapi/serializer"
 	"github.com/hyperledger/fabric-chaincode-go/pkg/cid"
 	"github.com/hyperledger/fabric-chaincode-go/shim"
 	"github.com/hyperledger/fabric-protos-go/peer"
@@ -29,11 +30,12 @@ type contractChaincodeContract struct {
 
 // ContractChaincode a struct to meet the chaincode interface and provide routing of calls to contracts
 type ContractChaincode struct {
-	defaultContract string
-	contracts       map[string]contractChaincodeContract
-	metadata        metadata.ContractChaincodeMetadata
-	title           string
-	version         string
+	defaultContract       string
+	contracts             map[string]contractChaincodeContract
+	metadata              metadata.ContractChaincodeMetadata
+	title                 string
+	version               string
+	transactionSerializer serializer.TransactionSerializer
 }
 
 // SystemContractName the name of the system smart contract
@@ -48,7 +50,9 @@ const SystemContractName = "org.hyperledger.fabric"
 // of the public functions. It also outlines version details for contracts and the chaincode. If these are blank
 // strings this is set to latest. The names for parameters do not match those used in the functions instead they are
 // recorded as param0, param1, ..., paramN. If there exists a file contract-metadata/metadata.json then this
-// will overwrite the generated metadata. The contents of this file must validate against the schema.
+// will overwrite the generated metadata. The contents of this file must validate against the schema. The transaction
+// serializer for the contract is set to be the JSONSerializer by default. This can be updated using
+// SetTransactionSerializer
 func CreateNewChaincode(contracts ...ContractInterface) (ContractChaincode, error) {
 	ciMethods := getCiMethods()
 
@@ -83,6 +87,8 @@ func CreateNewChaincode(contracts ...ContractInterface) (ContractChaincode, erro
 
 	sysC.setMetadata(string(metadataJSON))
 
+	cc.transactionSerializer = new(serializer.JSONSerializer)
+
 	return cc, nil
 }
 
@@ -106,6 +112,12 @@ func (cc *ContractChaincode) SetDefault(c ContractInterface) {
 	cc.defaultContract = c.GetName()
 }
 
+// SetTransactionSerializer sets the transaction serializer to be used for parsing input and
+// output of calls to functions within contracts
+func (cc *ContractChaincode) SetTransactionSerializer(ts serializer.TransactionSerializer) {
+	cc.transactionSerializer = ts
+}
+
 // Init is called during Instantiate transaction after the chaincode container
 // has been established for the first time, passes off details of the request to Invoke
 // for handling the request if a function name is passed, otherwise returns shim.Success
@@ -122,20 +134,21 @@ func (cc *ContractChaincode) Init(stub shim.ChaincodeStubInterface) peer.Respons
 // args passed in the transaction and uses the first argument to identify the contract
 // and function of that contract to be called. The remaining args are then used as
 // parameters to that function. Args are converted from strings to the expected parameter
-// types of the function before being passed. A transaction context is generated and is passed,
-// if required, as the first parameter to the named function. Before and after functions are
-// called before and after the named function passed if the contract defines such functions to
-// exist. If the before function returns an error the named function is not called and its error
+// types of the function before being passed using the set transaction serializer for the ContractChaincode.
+// A transaction context is generated and is passed, if required, as the first parameter to the named function.
+// Before and after functions are called before and after the named function passed if the contract defines such
+// functions to exist. If the before function returns an error the named function is not called and its error
 // is returned in shim.Error. If the after function returns an error then its value is returned
-// to shim.Error otherwise the value returned from the named function is returned as shim.Success.
-// If an unknown name is passed as part of the first arg a shim.Error is returned. If a valid
-// name is passed but the function name is unknown then the contract with that name's
+// to shim.Error otherwise the value returned from the named function is returned as shim.Success (formatted by
+// the transaction serializer). If an unknown name is passed as part of the first arg a shim.Error is returned.
+// If a valid name is passed but the function name is unknown then the contract with that name's
 // unknown function is called and its value returned as success or error depending on its return. If no
 // unknown function is defined for the contract then shim.Error is returned by Invoke. In the case of
-// unknown function names being passed (and the unknown handler returns an error) or the named function returning an error then the after function
-// if defined is not called. If the named function or unknown function handler returns a non-error type then then the after transaction
-// is sent this value. The same transaction context is passed as a pointer to before, after, named
-// and unknown functions on each Invoke. If no contract name is passed then the default contract is used.
+// unknown function names being passed (and the unknown handler returns an error) or the named function
+// returning an error then the after function if defined is not called. If the named function or unknown
+// function handler returns a non-error type then then the after transaction is sent this value. The same
+// transaction context is passed as a pointer to before, after, named and unknown functions on each Invoke.
+// If no contract name is passed then the default contract is used.
 func (cc *ContractChaincode) Invoke(stub shim.ChaincodeStubInterface) peer.Response {
 	nsFcn, params := stub.GetFunctionAndParameters()
 
@@ -168,7 +181,7 @@ func (cc *ContractChaincode) Invoke(stub shim.ChaincodeStubInterface) peer.Respo
 	beforeTransaction := nsContract.beforeTransaction
 
 	if beforeTransaction != nil {
-		_, _, errRes := beforeTransaction.Call(ctx, nil)
+		_, _, errRes := beforeTransaction.Call(ctx, nil, nil)
 
 		if errRes != nil {
 			return shim.Error(errRes.Error())
@@ -179,13 +192,15 @@ func (cc *ContractChaincode) Invoke(stub shim.ChaincodeStubInterface) peer.Respo
 	var successIFace interface{}
 	var errorReturn error
 
+	serializer := cc.transactionSerializer
+
 	if _, ok := nsContract.functions[fn]; !ok {
 		unknownTransaction := nsContract.unknownTransaction
 		if unknownTransaction == nil {
 			return shim.Error(fmt.Sprintf("Function %s not found in contract %s", fn, ns))
 		}
 
-		successReturn, successIFace, errorReturn = unknownTransaction.Call(ctx, nil)
+		successReturn, successIFace, errorReturn = unknownTransaction.Call(ctx, nil, serializer)
 	} else {
 		var transactionSchema *metadata.TransactionMetadata
 
@@ -196,7 +211,7 @@ func (cc *ContractChaincode) Invoke(stub shim.ChaincodeStubInterface) peer.Respo
 			}
 		}
 
-		successReturn, successIFace, errorReturn = nsContract.functions[fn].Call(ctx, transactionSchema, &cc.metadata.Components, params...)
+		successReturn, successIFace, errorReturn = nsContract.functions[fn].Call(ctx, transactionSchema, &cc.metadata.Components, serializer, params...)
 	}
 
 	if errorReturn != nil {
@@ -206,7 +221,7 @@ func (cc *ContractChaincode) Invoke(stub shim.ChaincodeStubInterface) peer.Respo
 	afterTransaction := nsContract.afterTransaction
 
 	if afterTransaction != nil {
-		_, _, errRes := afterTransaction.Call(ctx, successIFace)
+		_, _, errRes := afterTransaction.Call(ctx, successIFace, nil)
 
 		if errRes != nil {
 			return shim.Error(errRes.Error())

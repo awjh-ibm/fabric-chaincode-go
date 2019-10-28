@@ -166,11 +166,16 @@ func TestAddComponentIfNotExists(t *testing.T) {
 	_, expectedError := GetSchema(reflect.TypeOf(complex64(1)), components)
 	assert.EqualError(t, err, expectedError.Error(), "should use the same error as GetSchema when GetSchema errors")
 
+	components.Schemas = nil
+	err = addComponentIfNotExists(reflect.TypeOf(simpleStruct{}), components)
+	assert.Nil(t, err, "should not error when adding new component when schemas not initialised")
+	assert.Equal(t, components.Schemas["simpleStruct"], simpleStructMetadata, "should set correct metadata for new component when schemas not initialised")
+
 	delete(components.Schemas, "simpleStruct")
 	components.Schemas["otherStruct"] = someObject
 	err = addComponentIfNotExists(reflect.TypeOf(simpleStruct{}), components)
 	assert.Nil(t, err, "should not error when adding new component")
-	assert.Equal(t, components.Schemas["simpleStruct"], simpleStructMetadata, "should ser correct metadata for new component")
+	assert.Equal(t, components.Schemas["simpleStruct"], simpleStructMetadata, "should set correct metadata for new component")
 	assert.Equal(t, components.Schemas["otherStruct"], someObject, "should not affect existing components")
 }
 

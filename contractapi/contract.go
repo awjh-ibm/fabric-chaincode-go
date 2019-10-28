@@ -3,6 +3,8 @@
 
 package contractapi
 
+import "github.com/hyperledger/fabric-chaincode-go/contractapi/serializer"
+
 // IgnoreContractInterface extends ContractInterface and provides additional functionality
 // that can be used to mark which functions should not be accessible by invoking/querying
 // chaincode
@@ -83,6 +85,7 @@ type Contract struct {
 	beforeTransaction  interface{}
 	afterTransaction   interface{}
 	contextHandler     SettableTransactionContextInterface
+	serializer         serializer.TransactionSerializer
 	name               string
 }
 
@@ -144,7 +147,7 @@ func (c *Contract) SetTransactionContextHandler(ctx SettableTransactionContextIn
 }
 
 // GetTransactionContextHandler returns the current transaction context set for
-// the contract.
+// the contract. If none has been set then TransactionContext will be returned
 func (c *Contract) GetTransactionContextHandler() SettableTransactionContextInterface {
 	if c.contextHandler == nil {
 		return new(TransactionContext)
