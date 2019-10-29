@@ -122,7 +122,7 @@ func testHandleResponse(t *testing.T, successReturn reflect.Type, errorReturn bo
 	cf := ContractFunction{}
 
 	setContractFunctionReturns(&cf, successReturn, errorReturn)
-	strResp, valueResp, errResp := handleResponse(response, cf, serializer)
+	strResp, valueResp, errResp := cf.handleResponse(response, serializer)
 
 	assert.Equal(t, expectedString, strResp, "should have returned string value from response")
 	assert.Equal(t, expectedValue, valueResp, "should have returned actual value from response")
@@ -186,20 +186,20 @@ func TestFormatArgs(t *testing.T) {
 	ctx := reflect.Value{}
 
 	supplementaryMetadata.Parameters = []metadata.ParameterMetadata{}
-	args, err = formatArgs(fn, ctx, &supplementaryMetadata, nil, []string{}, serializer)
+	args, err = fn.formatArgs(ctx, &supplementaryMetadata, nil, []string{}, serializer)
 	assert.EqualError(t, err, "Incorrect number of params in supplementary metadata. Expected 2, received 0", "should return error when metadata is incorrect")
 	assert.Nil(t, args, "should not return values when metadata error occurs")
 
-	args, err = formatArgs(fn, ctx, nil, nil, []string{}, serializer)
+	args, err = fn.formatArgs(ctx, nil, nil, []string{}, serializer)
 	assert.EqualError(t, err, "Incorrect number of params. Expected 2, received 0", "should return error when number of params is incorrect")
 	assert.Nil(t, args, "should not return values when param error occurs")
 
 	_, fromStringErr := serializer.FromString("NaN", reflect.TypeOf(1), nil, nil)
-	args, err = formatArgs(fn, ctx, nil, nil, []string{"1", "NaN"}, serializer)
+	args, err = fn.formatArgs(ctx, nil, nil, []string{"1", "NaN"}, serializer)
 	assert.EqualError(t, err, fmt.Sprintf("Error managing parameter. %s", fromStringErr.Error()), "should return error when type of params is incorrect")
 	assert.Nil(t, args, "should not return values when from string error occurs")
 
-	args, err = formatArgs(fn, ctx, nil, nil, []string{"1", "2"}, serializer)
+	args, err = fn.formatArgs(ctx, nil, nil, []string{"1", "2"}, serializer)
 	assert.Nil(t, err, "should not error for valid values")
 	assert.Equal(t, 1, args[0].Interface(), "should return converted values")
 	assert.Equal(t, 2, args[1].Interface(), "should return converted values")
@@ -214,13 +214,13 @@ func TestFormatArgs(t *testing.T) {
 			Schema: *(spec.Int64Property()),
 		},
 	}
-	args, err = formatArgs(fn, ctx, &supplementaryMetadata, nil, []string{"1", "2"}, serializer)
+	args, err = fn.formatArgs(ctx, &supplementaryMetadata, nil, []string{"1", "2"}, serializer)
 	assert.Nil(t, err, "should not error for valid values which validates against metadata")
 	assert.Equal(t, 1, args[0].Interface(), "should return converted values validated against metadata")
 	assert.Equal(t, 2, args[1].Interface(), "should return converted values validated against metadata")
 
 	fn.params.context = reflect.TypeOf(ctx)
-	args, err = formatArgs(fn, ctx, nil, nil, []string{"1", "2"}, serializer)
+	args, err = fn.formatArgs(ctx, nil, nil, []string{"1", "2"}, serializer)
 	assert.Nil(t, err, "should not error for valid values with context")
 	assert.Equal(t, ctx, args[0], "should return converted values and context")
 	assert.Equal(t, 1, args[1].Interface(), "should return converted values and context")
@@ -521,12 +521,12 @@ func TestCall(t *testing.T) {
 	serializer := new(serializer.JSONSerializer)
 
 	actualStr, actualIface, actualErr = testCf.Call(ctx, nil, nil, serializer, "some data")
-	_, expectedErr = formatArgs(testCf, ctx, nil, nil, []string{"some data"}, serializer)
+	_, expectedErr = testCf.formatArgs(ctx, nil, nil, []string{"some data"}, serializer)
 	assert.EqualError(t, actualErr, expectedErr.Error(), "should error when formatting args fails")
 	assert.Nil(t, actualIface, "should not return an interface when format args fails")
 	assert.Equal(t, "", actualStr, "should return empty string when format args fails")
 
-	expectedStr, expectedIface, expectedErr = handleResponse([]reflect.Value{reflect.ValueOf("helloworld")}, testCf, serializer)
+	expectedStr, expectedIface, expectedErr = testCf.handleResponse([]reflect.Value{reflect.ValueOf("helloworld")}, serializer)
 	actualStr, actualIface, actualErr = testCf.Call(ctx, nil, nil, serializer, "hello", "world")
 	assert.Equal(t, actualErr, expectedErr, "should return same error as handle response for good function")
 	assert.Equal(t, expectedStr, actualStr, "should return same string as handle response for good function and params")

@@ -45,7 +45,7 @@ type ContractFunction struct {
 
 // Call calls function in a contract using string args and handles formatting the response into useful types
 func (cf ContractFunction) Call(ctx reflect.Value, supplementaryMetadata *metadata.TransactionMetadata, components *metadata.ComponentMetadata, serializer serializer.TransactionSerializer, params ...string) (string, interface{}, error) {
-	values, err := formatArgs(cf, ctx, supplementaryMetadata, components, params, serializer)
+	values, err := cf.formatArgs(ctx, supplementaryMetadata, components, params, serializer)
 
 	if err != nil {
 		return "", nil, err
@@ -53,7 +53,7 @@ func (cf ContractFunction) Call(ctx reflect.Value, supplementaryMetadata *metada
 
 	someResp := cf.function.Call(values)
 
-	return handleResponse(someResp, cf, serializer)
+	return cf.handleResponse(someResp, serializer)
 }
 
 // ReflectMetadata returns the metadata for contract function
@@ -87,6 +87,102 @@ func (cf ContractFunction) ReflectMetadata(name string, existingComponents *meta
 	}
 
 	return transactionMetadata
+}
+
+func (cf *ContractFunction) formatArgs(ctx reflect.Value, supplementaryMetadata *metadata.TransactionMetadata, components *metadata.ComponentMetadata, params []string, serializer serializer.TransactionSerializer) ([]reflect.Value, error) {
+	numParams := len(cf.params.fields)
+
+	if supplementaryMetadata != nil {
+		if len(supplementaryMetadata.Parameters) != numParams {
+			return nil, fmt.Errorf("Incorrect number of params in supplementary metadata. Expected %d, received %d", numParams, len(supplementaryMetadata.Parameters))
+		}
+	}
+
+	values := []reflect.Value{}
+
+	if cf.params.context != nil {
+		values = append(values, ctx)
+	}
+
+	if len(params) < numParams {
+		return nil, fmt.Errorf("Incorrect number of params. Expected %d, received %d", numParams, len(params))
+	}
+
+	for i := 0; i < numParams; i++ {
+
+		fieldType := cf.params.fields[i]
+
+		paramName := ""
+
+		var schema *spec.Schema
+
+		if supplementaryMetadata != nil {
+			paramName = " " + supplementaryMetadata.Parameters[i].Name
+			schema = &supplementaryMetadata.Parameters[i].Schema
+		}
+
+		converted, err := serializer.FromString(params[i], fieldType, schema, components)
+
+		if err != nil {
+			return nil, fmt.Errorf("Error managing parameter%s. %s", paramName, err.Error())
+		}
+
+		values = append(values, converted)
+	}
+
+	return values, nil
+}
+
+func (cf *ContractFunction) handleResponse(response []reflect.Value, serializer serializer.TransactionSerializer) (string, interface{}, error) {
+	expectedLength := 0
+
+	returnsSuccess := cf.returns.success != nil
+
+	if returnsSuccess && cf.returns.error {
+		expectedLength = 2
+	} else if returnsSuccess || cf.returns.error {
+		expectedLength = 1
+	}
+
+	if len(response) == expectedLength {
+
+		var successResponse reflect.Value
+		var errorResponse reflect.Value
+
+		if returnsSuccess && cf.returns.error {
+			successResponse = response[0]
+			errorResponse = response[1]
+		} else if returnsSuccess {
+			successResponse = response[0]
+		} else if cf.returns.error {
+			errorResponse = response[0]
+		}
+
+		var successString string
+		var errorError error
+		var iface interface{}
+
+		if successResponse.IsValid() {
+			if serializer != nil {
+				var err error
+				successString, err = serializer.ToString(successResponse, cf.returns.success, nil, nil)
+
+				if err != nil {
+					return "", nil, fmt.Errorf("Error handling success response. %s", err.Error())
+				}
+			}
+
+			iface = successResponse.Interface()
+		}
+
+		if errorResponse.IsValid() && !errorResponse.IsNil() {
+			errorError = errorResponse.Interface().(error)
+		}
+
+		return successString, iface, errorError
+	}
+
+	return "", nil, errors.New("response does not match expected return for given function")
 }
 
 func newContractFunction(fnValue reflect.Value, callType CallType, paramDetails contractFunctionParams, returnDetails contractFunctionReturns) *ContractFunction {
@@ -236,101 +332,4 @@ func methodToContractFunctionReturns(typeMethod reflect.Method) (contractFunctio
 		return contractFunctionReturns{firstOut, true}, nil
 	}
 	return contractFunctionReturns{nil, false}, nil
-}
-
-// Calling
-func formatArgs(fn ContractFunction, ctx reflect.Value, supplementaryMetadata *metadata.TransactionMetadata, components *metadata.ComponentMetadata, params []string, serializer serializer.TransactionSerializer) ([]reflect.Value, error) {
-	numParams := len(fn.params.fields)
-
-	if supplementaryMetadata != nil {
-		if len(supplementaryMetadata.Parameters) != numParams {
-			return nil, fmt.Errorf("Incorrect number of params in supplementary metadata. Expected %d, received %d", numParams, len(supplementaryMetadata.Parameters))
-		}
-	}
-
-	values := []reflect.Value{}
-
-	if fn.params.context != nil {
-		values = append(values, ctx)
-	}
-
-	if len(params) < numParams {
-		return nil, fmt.Errorf("Incorrect number of params. Expected %d, received %d", numParams, len(params))
-	}
-
-	for i := 0; i < numParams; i++ {
-
-		fieldType := fn.params.fields[i]
-
-		paramName := ""
-
-		var schema *spec.Schema
-
-		if supplementaryMetadata != nil {
-			paramName = " " + supplementaryMetadata.Parameters[i].Name
-			schema = &supplementaryMetadata.Parameters[i].Schema
-		}
-
-		converted, err := serializer.FromString(params[i], fieldType, schema, components)
-
-		if err != nil {
-			return nil, fmt.Errorf("Error managing parameter%s. %s", paramName, err.Error())
-		}
-
-		values = append(values, converted)
-	}
-
-	return values, nil
-}
-
-func handleResponse(response []reflect.Value, function ContractFunction, serializer serializer.TransactionSerializer) (string, interface{}, error) {
-	expectedLength := 0
-
-	returnsSuccess := function.returns.success != nil
-
-	if returnsSuccess && function.returns.error {
-		expectedLength = 2
-	} else if returnsSuccess || function.returns.error {
-		expectedLength = 1
-	}
-
-	if len(response) == expectedLength {
-
-		var successResponse reflect.Value
-		var errorResponse reflect.Value
-
-		if returnsSuccess && function.returns.error {
-			successResponse = response[0]
-			errorResponse = response[1]
-		} else if returnsSuccess {
-			successResponse = response[0]
-		} else if function.returns.error {
-			errorResponse = response[0]
-		}
-
-		var successString string
-		var errorError error
-		var iface interface{}
-
-		if successResponse.IsValid() {
-			if serializer != nil {
-				var err error
-				successString, err = serializer.ToString(successResponse, function.returns.success, nil, nil)
-
-				if err != nil {
-					return "", nil, fmt.Errorf("Error handling success response. %s", err.Error())
-				}
-			}
-
-			iface = successResponse.Interface()
-		}
-
-		if errorResponse.IsValid() && !errorResponse.IsNil() {
-			errorError = errorResponse.Interface().(error)
-		}
-
-		return successString, iface, errorError
-	}
-
-	return "", nil, errors.New("response does not match expected return for given function")
 }

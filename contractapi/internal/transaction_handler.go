@@ -62,7 +62,7 @@ func (th TransactionHandler) Call(ctx reflect.Value, data interface{}, serialize
 
 	someResp := th.function.Call(values)
 
-	return handleResponse(someResp, th.ContractFunction, serializer)
+	return th.handleResponse(someResp, serializer)
 }
 
 // NewTransactionHandler create a new transaction handler from a given function
