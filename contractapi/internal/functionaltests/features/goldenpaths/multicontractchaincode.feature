@@ -1,3 +1,5 @@
+# Copyright the Hyperledger Fabric contributors. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 @goldenpaths
 @multi
 Feature: Multiple Contract Chaincode Golden Path
