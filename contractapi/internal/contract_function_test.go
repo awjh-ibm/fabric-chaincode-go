@@ -125,7 +125,7 @@ func testHandleResponse(t *testing.T, successReturn reflect.Type, errorReturn bo
 	cf := ContractFunction{}
 
 	setContractFunctionReturns(&cf, successReturn, errorReturn)
-	strResp, valueResp, errResp := cf.handleResponse(response, serializer)
+	strResp, valueResp, errResp := cf.handleResponse(response, nil, nil, serializer)
 
 	assert.Equal(t, expectedString, strResp, "should have returned string value from response")
 	assert.Equal(t, expectedValue, valueResp, "should have returned actual value from response")
@@ -189,7 +189,7 @@ func TestFormatArgs(t *testing.T) {
 	ctx := reflect.Value{}
 
 	supplementaryMetadata.Parameters = []metadata.ParameterMetadata{}
-	args, err = fn.formatArgs(ctx, &supplementaryMetadata, nil, []string{}, serializer)
+	args, err = fn.formatArgs(ctx, supplementaryMetadata.Parameters, nil, []string{}, serializer)
 	assert.EqualError(t, err, "Incorrect number of params in supplementary metadata. Expected 2, received 0", "should return error when metadata is incorrect")
 	assert.Nil(t, args, "should not return values when metadata error occurs")
 
@@ -217,7 +217,7 @@ func TestFormatArgs(t *testing.T) {
 			Schema: *(spec.Int64Property()),
 		},
 	}
-	args, err = fn.formatArgs(ctx, &supplementaryMetadata, nil, []string{"1", "2"}, serializer)
+	args, err = fn.formatArgs(ctx, supplementaryMetadata.Parameters, nil, []string{"1", "2"}, serializer)
 	assert.Nil(t, err, "should not error for valid values which validates against metadata")
 	assert.Equal(t, 1, args[0].Interface(), "should return converted values validated against metadata")
 	assert.Equal(t, 2, args[1].Interface(), "should return converted values validated against metadata")
@@ -529,9 +529,21 @@ func TestCall(t *testing.T) {
 	assert.Nil(t, actualIface, "should not return an interface when format args fails")
 	assert.Equal(t, "", actualStr, "should return empty string when format args fails")
 
-	expectedStr, expectedIface, expectedErr = testCf.handleResponse([]reflect.Value{reflect.ValueOf("helloworld")}, serializer)
+	expectedStr, expectedIface, expectedErr = testCf.handleResponse([]reflect.Value{reflect.ValueOf("helloworld")}, nil, nil, serializer)
 	actualStr, actualIface, actualErr = testCf.Call(ctx, nil, nil, serializer, "hello", "world")
 	assert.Equal(t, actualErr, expectedErr, "should return same error as handle response for good function")
 	assert.Equal(t, expectedStr, actualStr, "should return same string as handle response for good function and params")
 	assert.Equal(t, expectedIface, expectedIface, "should return same interface as handle response for good function and params")
+
+	schema := metadata.TransactionMetadata{}
+	schema.Parameters = []metadata.ParameterMetadata{
+		metadata.ParameterMetadata{Schema: *spec.StringProperty()},
+		metadata.ParameterMetadata{Schema: *spec.StringProperty()},
+	}
+	schema.Returns = spec.StringProperty()
+	expectedStr, expectedIface, expectedErr = testCf.handleResponse([]reflect.Value{reflect.ValueOf("helloworld")}, nil, nil, serializer)
+	actualStr, actualIface, actualErr = testCf.Call(ctx, nil, nil, serializer, "hello", "world")
+	assert.Equal(t, actualErr, expectedErr, "should return same error as handle response for good function with schema")
+	assert.Equal(t, expectedStr, actualStr, "should return same string as handle response for good function and params with schema")
+	assert.Equal(t, expectedIface, expectedIface, "should return same interface as handle response for good function and params with schema")
 }

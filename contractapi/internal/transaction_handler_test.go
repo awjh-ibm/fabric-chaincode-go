@@ -146,21 +146,21 @@ func TestTHCall(t *testing.T) {
 	ms := transactionHandlerStruct{}
 
 	th, _ = NewTransactionHandler(ms.GoodBeforeUnknownAfterFunction, basicContextPtrType, TransactionHandlerTypeBefore)
-	expectedStr, expectedIFace, expectedErr = th.handleResponse([]reflect.Value{reflect.ValueOf(ms.GoodBeforeUnknownAfterFunction())}, serializer)
+	expectedStr, expectedIFace, expectedErr = th.handleResponse([]reflect.Value{reflect.ValueOf(ms.GoodBeforeUnknownAfterFunction())}, nil, nil, serializer)
 	actualStr, actualIFace, actualErr = th.Call(reflect.ValueOf(ctx), nil, serializer)
 	assert.Equal(t, expectedStr, actualStr, "should produce same string as handle response on real function")
 	assert.Equal(t, expectedIFace.(string), actualIFace.(string), "should produce same interface as handle response on real function")
 	assert.Equal(t, expectedErr, actualErr, "should produce same error as handle response on real function")
 
 	th, _ = NewTransactionHandler(ms.GoodBeforeUnknownAfterFunctionWithContext, basicContextPtrType, TransactionHandlerTypeBefore)
-	expectedStr, expectedIFace, expectedErr = th.handleResponse([]reflect.Value{reflect.ValueOf(ms.GoodBeforeUnknownAfterFunctionWithContext(ctx))}, serializer)
+	expectedStr, expectedIFace, expectedErr = th.handleResponse([]reflect.Value{reflect.ValueOf(ms.GoodBeforeUnknownAfterFunctionWithContext(ctx))}, nil, nil, serializer)
 	actualStr, actualIFace, actualErr = th.Call(reflect.ValueOf(ctx), nil, serializer)
 	assert.Equal(t, expectedStr, actualStr, "should produce same string as handle response on real function with context")
 	assert.Equal(t, expectedIFace.(string), actualIFace.(string), "should produce same interface as handle response on real function with context")
 	assert.Equal(t, expectedErr, actualErr, "should produce same error as handle response on real function with context")
 
 	th, _ = NewTransactionHandler(ms.GoodAfterFunction, basicContextPtrType, TransactionHandlerTypeAfter)
-	expectedStr, expectedIFace, expectedErr = th.handleResponse([]reflect.Value{reflect.ValueOf(ms.GoodAfterFunction("some str"))}, serializer)
+	expectedStr, expectedIFace, expectedErr = th.handleResponse([]reflect.Value{reflect.ValueOf(ms.GoodAfterFunction("some str"))}, nil, nil, serializer)
 	actualStr, actualIFace, actualErr = th.Call(reflect.ValueOf(ctx), "some str", serializer)
 	assert.Equal(t, expectedStr, actualStr, "should produce same string as handle response on real function for after with param")
 	assert.Equal(t, expectedIFace.(string), actualIFace.(string), "should produce same interface as handle response on real function for after with param")
@@ -168,7 +168,7 @@ func TestTHCall(t *testing.T) {
 
 	var ui *utils.UndefinedInterface
 	th, _ = NewTransactionHandler(ms.GoodAfterFunctionForUndefinedInterface, basicContextPtrType, TransactionHandlerTypeAfter)
-	expectedStr, expectedIFace, expectedErr = th.handleResponse([]reflect.Value{reflect.ValueOf(ms.GoodAfterFunctionForUndefinedInterface(ui))}, serializer)
+	expectedStr, expectedIFace, expectedErr = th.handleResponse([]reflect.Value{reflect.ValueOf(ms.GoodAfterFunctionForUndefinedInterface(ui))}, nil, nil, serializer)
 	actualStr, actualIFace, actualErr = th.Call(reflect.ValueOf(ctx), nil, serializer)
 	assert.Equal(t, expectedStr, actualStr, "should produce same string as handle response on real function for after with undefined interface")
 	assert.Equal(t, expectedIFace.(bool), actualIFace.(bool), "should produce same interface as handle response on real function for after with undefined interface")

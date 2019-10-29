@@ -29,6 +29,27 @@
                         {
                             "name": "param0",
                             "schema": {
+                                "type": "string"
+                            }
+                        }
+                    ],
+                    "returns": {
+                        "type": "number",
+                        "format": "double",
+                        "maximum": 10,
+                        "minimum": 0,
+                        "multipleOf": 1
+                    },
+                    "tag": [
+                        "evaluate"
+                    ],
+                    "name": "GetValue"
+                },
+                {
+                    "parameters": [
+                        {
+                            "name": "param0",
+                            "schema": {
                                 "type": "string",
                                 "pattern": "^OBJECT_\\d$"
                             }

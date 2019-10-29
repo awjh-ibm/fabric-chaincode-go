@@ -45,7 +45,12 @@ type ContractFunction struct {
 
 // Call calls function in a contract using string args and handles formatting the response into useful types
 func (cf ContractFunction) Call(ctx reflect.Value, supplementaryMetadata *metadata.TransactionMetadata, components *metadata.ComponentMetadata, serializer serializer.TransactionSerializer, params ...string) (string, interface{}, error) {
-	values, err := cf.formatArgs(ctx, supplementaryMetadata, components, params, serializer)
+	var parameterMetadata []metadata.ParameterMetadata
+	if supplementaryMetadata != nil {
+		parameterMetadata = supplementaryMetadata.Parameters
+	}
+
+	values, err := cf.formatArgs(ctx, parameterMetadata, components, params, serializer)
 
 	if err != nil {
 		return "", nil, err
@@ -53,7 +58,12 @@ func (cf ContractFunction) Call(ctx reflect.Value, supplementaryMetadata *metada
 
 	someResp := cf.function.Call(values)
 
-	return cf.handleResponse(someResp, serializer)
+	var returnsMetadata *spec.Schema
+	if supplementaryMetadata != nil {
+		returnsMetadata = supplementaryMetadata.Returns
+	}
+
+	return cf.handleResponse(someResp, returnsMetadata, components, serializer)
 }
 
 // ReflectMetadata returns the metadata for contract function
@@ -89,12 +99,12 @@ func (cf ContractFunction) ReflectMetadata(name string, existingComponents *meta
 	return transactionMetadata
 }
 
-func (cf *ContractFunction) formatArgs(ctx reflect.Value, supplementaryMetadata *metadata.TransactionMetadata, components *metadata.ComponentMetadata, params []string, serializer serializer.TransactionSerializer) ([]reflect.Value, error) {
+func (cf *ContractFunction) formatArgs(ctx reflect.Value, supplementaryMetadata []metadata.ParameterMetadata, components *metadata.ComponentMetadata, params []string, serializer serializer.TransactionSerializer) ([]reflect.Value, error) {
 	numParams := len(cf.params.fields)
 
 	if supplementaryMetadata != nil {
-		if len(supplementaryMetadata.Parameters) != numParams {
-			return nil, fmt.Errorf("Incorrect number of params in supplementary metadata. Expected %d, received %d", numParams, len(supplementaryMetadata.Parameters))
+		if len(supplementaryMetadata) != numParams {
+			return nil, fmt.Errorf("Incorrect number of params in supplementary metadata. Expected %d, received %d", numParams, len(supplementaryMetadata))
 		}
 	}
 
@@ -117,8 +127,8 @@ func (cf *ContractFunction) formatArgs(ctx reflect.Value, supplementaryMetadata 
 		var schema *spec.Schema
 
 		if supplementaryMetadata != nil {
-			paramName = " " + supplementaryMetadata.Parameters[i].Name
-			schema = &supplementaryMetadata.Parameters[i].Schema
+			paramName = " " + supplementaryMetadata[i].Name
+			schema = &supplementaryMetadata[i].Schema
 		}
 
 		converted, err := serializer.FromString(params[i], fieldType, schema, components)
@@ -133,7 +143,7 @@ func (cf *ContractFunction) formatArgs(ctx reflect.Value, supplementaryMetadata 
 	return values, nil
 }
 
-func (cf *ContractFunction) handleResponse(response []reflect.Value, serializer serializer.TransactionSerializer) (string, interface{}, error) {
+func (cf *ContractFunction) handleResponse(response []reflect.Value, supplementaryMetadata *spec.Schema, components *metadata.ComponentMetadata, serializer serializer.TransactionSerializer) (string, interface{}, error) {
 	expectedLength := 0
 
 	returnsSuccess := cf.returns.success != nil
@@ -165,7 +175,7 @@ func (cf *ContractFunction) handleResponse(response []reflect.Value, serializer 
 		if successResponse.IsValid() {
 			if serializer != nil {
 				var err error
-				successString, err = serializer.ToString(successResponse, cf.returns.success, nil, nil)
+				successString, err = serializer.ToString(successResponse, cf.returns.success, supplementaryMetadata, components)
 
 				if err != nil {
 					return "", nil, fmt.Errorf("Error handling success response. %s", err.Error())

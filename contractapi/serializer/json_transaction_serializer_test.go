@@ -193,7 +193,7 @@ func TestValidateAgainstSchema(t *testing.T) {
 	toValidate["prop"] = -1
 	comparisonSchema = types.BasicTypes[reflect.Uint].GetSchema()
 	err = validateAgainstSchema(toValidate, comparisonSchema, &components)
-	assert.Contains(t, err.Error(), "Value passed for parameter did not match schema", "should error when data doesnt match schema")
+	assert.Contains(t, err.Error(), "Value did not match schema", "should error when data doesnt match schema")
 
 	toValidate["prop"] = 10
 	comparisonSchema = types.BasicTypes[reflect.Uint].GetSchema()
@@ -241,6 +241,9 @@ func TestFromString(t *testing.T) {
 func TestToString(t *testing.T) {
 	var err error
 	var value string
+	var expectedErr error
+	var schema *spec.Schema
+	var toValidate map[string]interface{}
 
 	serializer := new(JSONSerializer)
 
@@ -258,4 +261,22 @@ func TestToString(t *testing.T) {
 	value, err = serializer.ToString(reflect.ValueOf(1), reflect.TypeOf(1), nil, nil)
 	assert.Nil(t, err, "should not error when receives non nillable and marshalling type")
 	assert.Equal(t, "1", value, "should return sprint version of value when not marshalling type")
+
+	float := float64(2)
+	schema = spec.Int64Property()
+	schema.Minimum = &float
+	value, err = serializer.ToString(reflect.ValueOf(1), reflect.TypeOf(1), schema, nil)
+	toValidate = make(map[string]interface{})
+	toValidate["prop"] = 1
+	expectedErr = validateAgainstSchema(toValidate, schema, nil)
+	assert.EqualError(t, err, expectedErr.Error(), "should error when validateAgainstSchema errors")
+	assert.Equal(t, "", value, "should return an empty string value when it errors due to validateAgainstSchema")
+
+	expectedStruct := new(simpleStruct)
+	expectedStruct.Prop1 = "hello"
+	components := new(metadata.ComponentMetadata)
+	schema, _ = metadata.GetSchema(reflect.TypeOf(expectedStruct), components)
+	value, err = serializer.ToString(reflect.ValueOf(expectedStruct), reflect.TypeOf(expectedStruct), schema, components)
+	assert.Nil(t, err, "should not error when making a string passes and schema passes")
+	assert.Equal(t, "{\"prop1\":\"hello\"}", value, "should return string value when schema passes")
 }

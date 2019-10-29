@@ -64,6 +64,24 @@ func (js *JSONSerializer) ToString(result reflect.Value, resultType reflect.Type
 		} else {
 			str = fmt.Sprint(result.Interface())
 		}
+
+		if schema != nil {
+			toValidate := make(map[string]interface{})
+
+			if resultType.Kind() == reflect.Struct || (resultType.Kind() == reflect.Ptr && resultType.Elem().Kind() == reflect.Struct) {
+				structMap := make(map[string]interface{})
+				json.Unmarshal([]byte(str), &structMap) // use a map for structs as schema seems to like that
+				toValidate["prop"] = structMap
+			} else {
+				toValidate["prop"] = result.Interface()
+			}
+
+			err := validateAgainstSchema(toValidate, schema, components)
+
+			if err != nil {
+				return "", err
+			}
+		}
 	}
 
 	return str, nil
@@ -116,7 +134,7 @@ func validateAgainstSchema(toValidate map[string]interface{}, comparisonSchema *
 	result, _ := schema.Validate(toValidateLoader)
 
 	if !result.Valid() {
-		return fmt.Errorf("Value passed for parameter did not match schema:\n%s", utils.ValidateErrorsToString(result.Errors()))
+		return fmt.Errorf("Value did not match schema:\n%s", utils.ValidateErrorsToString(result.Errors()))
 	}
 
 	return nil

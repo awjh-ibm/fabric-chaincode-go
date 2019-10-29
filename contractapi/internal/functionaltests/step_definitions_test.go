@@ -210,8 +210,6 @@ func (sc *suiteContext) invokeChaincode(function string, argsTbl *gherkin.DataTa
 
 	sc.lastResponse = response
 
-	println(response.GetMessage())
-
 	return nil
 }
 
@@ -251,8 +249,8 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^I have created chaincode from multiple contracts$`, sc.createChaincodeMulti)
 	s.Step(`^I have created and initialised chaincode (?:["'](.*?)["'])$`, sc.createChaincodeAndInit)
 	s.Step(`^I am using metadata file (?:["'](.*?)["'])$`, sc.setupMetadata)
-	s.Step(`^I should be able to initialise the chaincode`, sc.testInitialise)
+	s.Step(`^I (?:should\s)?be able to initialise the chaincode`, sc.testInitialise)
 	s.Step(`^I submit the (?:"(.*?)") transaction$`, sc.invokeChaincode)
-	s.Step(`^I should receive a successful response\s?(?:(?:["'](.*?)["'])?)$`, sc.checkSuccessResponse)
-	s.Step(`^I should receive an unsuccessful response\s?(?:(?:["'](.*?)["'])?)$`, sc.checkFailedResponse)
+	s.Step(`^I (?:should\s)?receive a successful response\s?(?:(?:["'](.*?)["'])?)$`, sc.checkSuccessResponse)
+	s.Step(`^I (?:should\s)?receive an unsuccessful response\s?(?:(?:["'](.*?)["'])?)$`, sc.checkFailedResponse)
 }

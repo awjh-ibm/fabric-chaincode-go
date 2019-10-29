@@ -126,3 +126,22 @@ func (c *ComplexContract) GetObject(ctx utils.CustomTransactionContextInterface,
 
 	return ba, nil
 }
+
+// GetValue returns the value from the object with id given from the world state
+func (c *ComplexContract) GetValue(ctx utils.CustomTransactionContextInterface, id string) (uint, error) {
+	existing := ctx.GetCallData()
+
+	if existing == nil {
+		return 0, fmt.Errorf("Cannot read world state pair with key %s. Does not exist", id)
+	}
+
+	ba := new(BasicObject)
+
+	err := json.Unmarshal(existing, ba)
+
+	if err != nil {
+		return 0, fmt.Errorf("Data retrieved from world state for key %s was not of type BasicObject", id)
+	}
+
+	return ba.Value, nil
+}
