@@ -47,7 +47,7 @@ var osAbs osInterface = osFront{}
 
 // GetJSONSchema returns the JSON schema used for metadata
 func GetJSONSchema() ([]byte, error) {
-	file, err := readLocalFile("schema/schema.json")
+	file, err := readLocalFile("schema.json")
 
 	if err != nil {
 		return nil, fmt.Errorf("Unable to read JSON schema. Error: %s", err.Error())

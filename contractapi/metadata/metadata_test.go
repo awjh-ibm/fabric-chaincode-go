@@ -29,7 +29,7 @@ func (io ioUtilReadFileTestStr) ReadFile(filename string) ([]byte, error) {
 type ioUtilBadSchemaLocationTestStr struct{}
 
 func (io ioUtilBadSchemaLocationTestStr) ReadFile(filename string) ([]byte, error) {
-	if strings.Contains(filename, "schema/schema.json") {
+	if strings.Contains(filename, "schema.json") {
 		return nil, errors.New("some error")
 	}
 
@@ -39,7 +39,7 @@ func (io ioUtilBadSchemaLocationTestStr) ReadFile(filename string) ([]byte, erro
 type ioUtilWorkTestStr struct{}
 
 func (io ioUtilWorkTestStr) ReadFile(filename string) ([]byte, error) {
-	if strings.Contains(filename, "schema/schema.json") {
+	if strings.Contains(filename, "schema.json") {
 		return ioutil.ReadFile(filename)
 	}
 
@@ -96,7 +96,7 @@ func TestGetJSONSchema(t *testing.T) {
 	var schema []byte
 	var err error
 
-	file, _ := readLocalFile("schema/schema.json")
+	file, _ := readLocalFile("schema.json")
 	schema, err = GetJSONSchema()
 	assert.Nil(t, err, "should not return error for valid file")
 	assert.Equal(t, string(schema), string(file), "should retrieve schema file")
