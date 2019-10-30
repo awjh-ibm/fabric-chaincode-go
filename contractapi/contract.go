@@ -3,7 +3,7 @@
 
 package contractapi
 
-import "github.com/hyperledger/fabric-chaincode-go/contractapi/serializer"
+import "github.com/awjh-ibm/fabric-chaincode-go/contractapi/serializer"
 
 // IgnoreContractInterface extends ContractInterface and provides additional functionality
 // that can be used to mark which functions should not be accessible by invoking/querying

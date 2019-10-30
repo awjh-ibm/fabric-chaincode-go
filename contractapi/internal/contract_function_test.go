@@ -10,8 +10,8 @@ import (
 	"testing"
 
 	"github.com/go-openapi/spec"
-	metadata "github.com/hyperledger/fabric-chaincode-go/contractapi/metadata"
-	"github.com/hyperledger/fabric-chaincode-go/contractapi/serializer"
+	metadata "github.com/awjh-ibm/fabric-chaincode-go/contractapi/metadata"
+	"github.com/awjh-ibm/fabric-chaincode-go/contractapi/serializer"
 	"github.com/stretchr/testify/assert"
 )
 

@@ -7,7 +7,7 @@ import (
 	"reflect"
 
 	"github.com/go-openapi/spec"
-	"github.com/hyperledger/fabric-chaincode-go/contractapi/metadata"
+	"github.com/awjh-ibm/fabric-chaincode-go/contractapi/metadata"
 )
 
 // TransactionSerializer defines the functions a valid transaction serializer

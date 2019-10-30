@@ -8,7 +8,7 @@ import (
 	"reflect"
 	"sort"
 
-	"github.com/hyperledger/fabric-chaincode-go/contractapi/internal/types"
+	"github.com/awjh-ibm/fabric-chaincode-go/contractapi/internal/types"
 )
 
 func basicTypesAsSlice() []string {

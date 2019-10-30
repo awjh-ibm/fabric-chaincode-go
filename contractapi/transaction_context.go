@@ -4,8 +4,8 @@
 package contractapi
 
 import (
-	"github.com/hyperledger/fabric-chaincode-go/pkg/cid"
-	"github.com/hyperledger/fabric-chaincode-go/shim"
+	"github.com/awjh-ibm/fabric-chaincode-go/pkg/cid"
+	"github.com/awjh-ibm/fabric-chaincode-go/shim"
 )
 
 // TransactionContextInterface defines the interface which TransactionContext

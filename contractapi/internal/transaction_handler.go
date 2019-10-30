@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/hyperledger/fabric-chaincode-go/contractapi/serializer"
-	"github.com/hyperledger/fabric-chaincode-go/contractapi/utils"
+	"github.com/awjh-ibm/fabric-chaincode-go/contractapi/serializer"
+	"github.com/awjh-ibm/fabric-chaincode-go/contractapi/utils"
 )
 
 // TransactionHandlerType enum for type of transaction handled

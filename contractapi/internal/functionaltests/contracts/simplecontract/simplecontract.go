@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/hyperledger/fabric-chaincode-go/contractapi"
+	"github.com/awjh-ibm/fabric-chaincode-go/contractapi"
 )
 
 // SimpleContract with biz logic

@@ -11,11 +11,11 @@ import (
 	"testing"
 
 	"github.com/go-openapi/spec"
-	"github.com/hyperledger/fabric-chaincode-go/contractapi/internal"
-	"github.com/hyperledger/fabric-chaincode-go/contractapi/metadata"
-	"github.com/hyperledger/fabric-chaincode-go/contractapi/serializer"
-	"github.com/hyperledger/fabric-chaincode-go/shim"
-	"github.com/hyperledger/fabric-chaincode-go/shimtest"
+	"github.com/awjh-ibm/fabric-chaincode-go/contractapi/internal"
+	"github.com/awjh-ibm/fabric-chaincode-go/contractapi/metadata"
+	"github.com/awjh-ibm/fabric-chaincode-go/contractapi/serializer"
+	"github.com/awjh-ibm/fabric-chaincode-go/shim"
+	"github.com/awjh-ibm/fabric-chaincode-go/shimtest"
 	"github.com/hyperledger/fabric-protos-go/peer"
 	"github.com/stretchr/testify/assert"
 )

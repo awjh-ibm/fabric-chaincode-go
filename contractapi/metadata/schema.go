@@ -9,7 +9,7 @@ import (
 	"unicode"
 
 	"github.com/go-openapi/spec"
-	"github.com/hyperledger/fabric-chaincode-go/contractapi/internal/types"
+	"github.com/awjh-ibm/fabric-chaincode-go/contractapi/internal/types"
 )
 
 // GetSchema returns the open api spec schema for a given type

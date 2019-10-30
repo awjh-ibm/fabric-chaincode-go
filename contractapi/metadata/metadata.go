@@ -12,7 +12,7 @@ import (
 	"reflect"
 
 	"github.com/go-openapi/spec"
-	"github.com/hyperledger/fabric-chaincode-go/contractapi/internal/utils"
+	"github.com/awjh-ibm/fabric-chaincode-go/contractapi/internal/utils"
 	"github.com/xeipuuv/gojsonschema"
 )
 

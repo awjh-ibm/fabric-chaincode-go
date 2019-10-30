@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/hyperledger/fabric-chaincode-go/contractapi"
+	"github.com/awjh-ibm/fabric-chaincode-go/contractapi"
 )
 
 // CustomTransactionContextInterface adds extra methods to basic context

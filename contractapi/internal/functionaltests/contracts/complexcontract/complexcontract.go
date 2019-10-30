@@ -8,8 +8,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/hyperledger/fabric-chaincode-go/contractapi"
-	"github.com/hyperledger/fabric-chaincode-go/contractapi/internal/functionaltests/contracts/utils"
+	"github.com/awjh-ibm/fabric-chaincode-go/contractapi"
+	"github.com/awjh-ibm/fabric-chaincode-go/contractapi/internal/functionaltests/contracts/utils"
 )
 
 // ComplexContract contract for handling the business logic of a basic object
