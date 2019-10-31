@@ -202,6 +202,9 @@ func testCallingContractFunctions(t *testing.T, callType string) {
 	// Should error when name not known
 	callContractFunctionAndCheckError(t, cc, []string{"somebadname:somebadfunctionname"}, callType, "Contract not found with name somebadname")
 
+	// should return error when function blank
+	callContractFunctionAndCheckError(t, cc, []string{"goodContract:"}, callType, "Blank function name passed")
+
 	// should return error when function not known and no unknown transaction specified
 	gc.SetName("customname")
 	cc, _ = CreateNewChaincode(&gc)
@@ -215,6 +218,9 @@ func testCallingContractFunctions(t *testing.T, callType string) {
 
 	// Should return success when function returns nothing
 	callContractFunctionAndCheckSuccess(t, cc, []string{"goodContract:ReturnsNothing"}, callType, "")
+
+	// Should return success when function starts with lower case
+	callContractFunctionAndCheckSuccess(t, cc, []string{"goodContract:returnsNothing"}, callType, "")
 
 	// should return success when function returns no error
 	callContractFunctionAndCheckSuccess(t, cc, []string{"goodContract:ReturnsString"}, callType, gc.ReturnsString())

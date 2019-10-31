@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/awjh-ibm/fabric-chaincode-go/contractapi/internal"
 	"github.com/awjh-ibm/fabric-chaincode-go/contractapi/internal/utils"
@@ -169,6 +170,19 @@ func (cc *ContractChaincode) Invoke(stub shim.ChaincodeStubInterface) peer.Respo
 		return shim.Error(fmt.Sprintf("Contract not found with name %s", ns))
 	}
 
+	if fn == "" {
+		return shim.Error("Blank function name passed")
+	}
+
+	originalFn := fn
+
+	fnRune := []rune(fn)
+
+	if unicode.IsLower(fnRune[0]) {
+		fnRune[0] = unicode.ToUpper(fnRune[0])
+		fn = string(fnRune)
+	}
+
 	nsContract := cc.contracts[ns]
 
 	ctx := reflect.New(nsContract.transactionContextHandler)
@@ -197,7 +211,7 @@ func (cc *ContractChaincode) Invoke(stub shim.ChaincodeStubInterface) peer.Respo
 	if _, ok := nsContract.functions[fn]; !ok {
 		unknownTransaction := nsContract.unknownTransaction
 		if unknownTransaction == nil {
-			return shim.Error(fmt.Sprintf("Function %s not found in contract %s", fn, ns))
+			return shim.Error(fmt.Sprintf("Function %s not found in contract %s", originalFn, ns))
 		}
 
 		successReturn, successIFace, errorReturn = unknownTransaction.Call(ctx, nil, serializer)
