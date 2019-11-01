@@ -6,7 +6,6 @@ package metadata
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -24,16 +23,6 @@ type ioUtilReadFileTestStr struct{}
 
 func (io ioUtilReadFileTestStr) ReadFile(filename string) ([]byte, error) {
 	return nil, errors.New("some error")
-}
-
-type ioUtilBadSchemaLocationTestStr struct{}
-
-func (io ioUtilBadSchemaLocationTestStr) ReadFile(filename string) ([]byte, error) {
-	if strings.Contains(filename, "schema.json") {
-		return nil, errors.New("some error")
-	}
-
-	return []byte("{\"some\":\"json\"}"), nil
 }
 
 type ioUtilWorkTestStr struct{}
@@ -96,18 +85,15 @@ func TestGetJSONSchema(t *testing.T) {
 	var schema []byte
 	var err error
 
-	file, _ := readLocalFile("schema.json")
+	expectedSchema, expectedErr := readLocalFile("schema/schema.json")
 	schema, err = GetJSONSchema()
-	assert.Nil(t, err, "should not return error for valid file")
-	assert.Equal(t, string(schema), string(file), "should retrieve schema file")
 
-	oldIoUtilHelper := ioutilAbs
-	ioutilAbs = ioUtilReadFileTestStr{}
+	if expectedErr != nil {
+		panic("TEST FAILED. Reading schema should not return error")
+	}
 
-	schema, err = GetJSONSchema()
-	assert.EqualError(t, err, "Unable to read JSON schema. Error: some error", "should return error when can't read schema")
-	assert.Nil(t, schema, "should not return string when read of file errors")
-	ioutilAbs = oldIoUtilHelper
+	assert.Nil(t, err, "should not error when getting schema")
+	assert.Equal(t, expectedSchema, schema, "should return same schema as in file. Have you updated schema without running packr?")
 }
 
 func TestAppend(t *testing.T) {
@@ -241,11 +227,6 @@ func TestValidateAgainstSchema(t *testing.T) {
 	osAbs = osWorkTestStr{}
 
 	metadata := ContractChaincodeMetadata{}
-
-	ioutilAbs = ioUtilBadSchemaLocationTestStr{}
-	err = ValidateAgainstSchema(metadata)
-	_, expectedErr := GetJSONSchema()
-	assert.EqualError(t, err, fmt.Sprintf("Failed to read JSON schema. %s", expectedErr.Error()), "should error when cannot read JSON schema")
 
 	ioutilAbs = ioUtilWorkTestStr{}
 

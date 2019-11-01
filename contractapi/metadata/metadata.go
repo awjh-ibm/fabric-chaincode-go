@@ -13,6 +13,7 @@ import (
 
 	"github.com/go-openapi/spec"
 	"github.com/awjh-ibm/fabric-chaincode-go/contractapi/internal/utils"
+	"github.com/gobuffalo/packr"
 	"github.com/xeipuuv/gojsonschema"
 )
 
@@ -47,13 +48,11 @@ var osAbs osInterface = osFront{}
 
 // GetJSONSchema returns the JSON schema used for metadata
 func GetJSONSchema() ([]byte, error) {
-	file, err := readLocalFile("schema.json")
+	box := packr.NewBox("./schema")
 
-	if err != nil {
-		return nil, fmt.Errorf("Unable to read JSON schema. Error: %s", err.Error())
-	}
+	schema, err := box.Find("schema.json")
 
-	return file, nil
+	return schema, err
 }
 
 // ParameterMetadata details about a parameter used for a transaction

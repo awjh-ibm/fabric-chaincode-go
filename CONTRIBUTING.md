@@ -5,3 +5,6 @@ We welcome contributions to the Hyperledger Fabric Project in many forms, and th
 Please visit the [contributors guide](http://hyperledger-fabric.readthedocs.io/en/latest/CONTRIBUTING.html) in the docs to learn how to make contributions to this exciting project.
 
 <a rel="license" href="http://creativecommons.org/licenses/by/4.0/"><img alt="Creative Commons License" style="border-width:0" src="https://i.creativecommons.org/l/by/4.0/88x31.png" /></a><br />This work is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 International License</a>.
+
+# Updating contractapi/metadata/schema/schema.json
+Should you update contractapi/metadata/schema/schema.json you will need to run the `packr` command (https://github.com/gobuffalo/packr) inside contractapi/metadata. This will generate a go file (a_metadata-packr.go) which contains the contents of your updated schema.
