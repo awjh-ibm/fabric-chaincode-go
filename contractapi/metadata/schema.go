@@ -96,33 +96,11 @@ func addComponentIfNotExists(obj reflect.Type, components *ComponentMetadata) er
 	schema.AdditionalProperties = false
 
 	for i := 0; i < obj.NumField(); i++ {
-		if obj.Field(i).Name == "" {
-			continue
-		}
-
-		name := obj.Field(i).Tag.Get("metadata")
-
-		if unicode.IsLower([]rune(obj.Field(i).Name)[0]) && name == "" {
-			continue
-		} else if name == "" {
-			name = obj.Field(i).Tag.Get("json")
-		}
-
-		if name == "" {
-			name = obj.Field(i).Name
-		}
-
-		var err error
-
-		propSchema, err := GetSchema(obj.Field(i).Type, components)
+		err := getFields(obj.Field(i), &schema, components)
 
 		if err != nil {
 			return err
 		}
-
-		schema.Required = append(schema.Required, name)
-
-		schema.Properties[name] = *propSchema
 	}
 
 	if components.Schemas == nil {
@@ -130,6 +108,48 @@ func addComponentIfNotExists(obj reflect.Type, components *ComponentMetadata) er
 	}
 
 	components.Schemas[obj.Name()] = schema
+
+	return nil
+}
+
+func getFields(field reflect.StructField, schema *ObjectMetadata, components *ComponentMetadata) error {
+	if field.Anonymous {
+		if field.Type.Kind() == reflect.Struct {
+			for i := 0; i < field.Type.NumField(); i++ {
+				err := getFields(field.Type.Field(i), schema, components)
+
+				if err != nil {
+					return err
+				}
+			}
+		}
+
+		return nil
+	}
+
+	name := field.Tag.Get("metadata")
+
+	if unicode.IsLower([]rune(field.Name)[0]) && name == "" {
+		return nil
+	} else if name == "" {
+		name = field.Tag.Get("json")
+	}
+
+	if name == "" {
+		name = field.Name
+	}
+
+	var err error
+
+	propSchema, err := GetSchema(field.Type, components)
+
+	if err != nil {
+		return err
+	}
+
+	schema.Required = append(schema.Required, name)
+
+	schema.Properties[name] = *propSchema
 
 	return nil
 }

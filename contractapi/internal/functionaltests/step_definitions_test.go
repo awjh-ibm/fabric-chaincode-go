@@ -42,9 +42,9 @@ func init() {
 func NewExtendedContract() *extendedsimplecontract.ExtendedSimpleContract {
 	esc := new(extendedsimplecontract.ExtendedSimpleContract)
 
-	esc.SetTransactionContextHandler(new(utils.CustomTransactionContext))
-	esc.SetBeforeTransaction(utils.GetWorldState)
-	esc.SetUnknownTransaction(utils.UnknownTransactionHandler)
+	esc.TransactionContextHandler = new(utils.CustomTransactionContext)
+	esc.BeforeTransaction = utils.GetWorldState
+	esc.UnknownTransaction = utils.UnknownTransactionHandler
 
 	return esc
 }
@@ -52,9 +52,9 @@ func NewExtendedContract() *extendedsimplecontract.ExtendedSimpleContract {
 func NewComplexContract() *complexcontract.ComplexContract {
 	cc := new(complexcontract.ComplexContract)
 
-	cc.SetTransactionContextHandler(new(utils.CustomTransactionContext))
-	cc.SetBeforeTransaction(utils.GetWorldState)
-	cc.SetUnknownTransaction(utils.UnknownTransactionHandler)
+	cc.TransactionContextHandler = new(utils.CustomTransactionContext)
+	cc.BeforeTransaction = utils.GetWorldState
+	cc.UnknownTransaction = utils.UnknownTransactionHandler
 
 	return cc
 }
@@ -62,7 +62,7 @@ func NewComplexContract() *complexcontract.ComplexContract {
 type suiteContext struct {
 	lastResponse   peer.Response
 	stub           *shimtest.MockStub
-	chaincode      contractapi.ContractChaincode
+	chaincode      *contractapi.ContractChaincode
 	metadataFolder string
 }
 
@@ -86,7 +86,7 @@ func (sc *suiteContext) createChaincode(name string) error {
 	}
 
 	sc.chaincode = chaincode
-	sc.stub = shimtest.NewMockStub(name, &sc.chaincode)
+	sc.stub = shimtest.NewMockStub(name, sc.chaincode)
 
 	return nil
 }
@@ -129,7 +129,7 @@ func (sc *suiteContext) createChaincodeMulti(contractsTbl *gherkin.DataTable) er
 	}
 
 	sc.chaincode = chaincode
-	sc.stub = shimtest.NewMockStub("MultiContract", &sc.chaincode)
+	sc.stub = shimtest.NewMockStub("MultiContract", sc.chaincode)
 
 	return nil
 }

@@ -31,12 +31,12 @@ type contractChaincodeContract struct {
 
 // ContractChaincode a struct to meet the chaincode interface and provide routing of calls to contracts
 type ContractChaincode struct {
-	defaultContract       string
+	DefaultContract       string
 	contracts             map[string]contractChaincodeContract
 	metadata              metadata.ContractChaincodeMetadata
-	title                 string
-	version               string
-	transactionSerializer serializer.TransactionSerializer
+	Title                 string
+	Version               string
+	TransactionSerializer serializer.TransactionSerializer
 }
 
 // SystemContractName the name of the system smart contract
@@ -53,11 +53,11 @@ const SystemContractName = "org.hyperledger.fabric"
 // recorded as param0, param1, ..., paramN. If there exists a file contract-metadata/metadata.json then this
 // will overwrite the generated metadata. The contents of this file must validate against the schema. The transaction
 // serializer for the contract is set to be the JSONSerializer by default. This can be updated using
-// SetTransactionSerializer
-func CreateNewChaincode(contracts ...ContractInterface) (ContractChaincode, error) {
+// by changing the TransactionSerializer property
+func CreateNewChaincode(contracts ...ContractInterface) (*ContractChaincode, error) {
 	ciMethods := getCiMethods()
 
-	cc := ContractChaincode{}
+	cc := new(ContractChaincode)
 	cc.contracts = make(map[string]contractChaincodeContract)
 
 	for _, contract := range contracts {
@@ -69,26 +69,26 @@ func CreateNewChaincode(contracts ...ContractInterface) (ContractChaincode, erro
 		err := cc.addContract(contract, append(ciMethods, additionalExcludes...))
 
 		if err != nil {
-			return ContractChaincode{}, err
+			return nil, err
 		}
 	}
 
 	sysC := new(SystemContract)
-	sysC.SetName(SystemContractName)
+	sysC.Name = SystemContractName
 
-	cc.addContract(sysC, append(ciMethods, sysC.GetIgnoredFunctions()...)) // should never error as system contract is good
+	cc.addContract(sysC, ciMethods) // should never error as system contract is good
 
 	err := cc.augmentMetadata()
 
 	if err != nil {
-		return ContractChaincode{}, err
+		return nil, err
 	}
 
 	metadataJSON, _ := json.Marshal(cc.metadata)
 
 	sysC.setMetadata(string(metadataJSON))
 
-	cc.transactionSerializer = new(serializer.JSONSerializer)
+	cc.TransactionSerializer = new(serializer.JSONSerializer)
 
 	return cc, nil
 }
@@ -96,27 +96,6 @@ func CreateNewChaincode(contracts ...ContractInterface) (ContractChaincode, erro
 // Start starts the chaincode in the fabric shim
 func (cc *ContractChaincode) Start() error {
 	return shim.Start(cc)
-}
-
-// SetTitle sets the title
-func (cc *ContractChaincode) SetTitle(title string) {
-	cc.title = title
-}
-
-// SetVersion sets the version
-func (cc *ContractChaincode) SetVersion(version string) {
-	cc.version = version
-}
-
-// SetDefault sets the default contract name
-func (cc *ContractChaincode) SetDefault(c ContractInterface) {
-	cc.defaultContract = c.GetName()
-}
-
-// SetTransactionSerializer sets the transaction serializer to be used for parsing input and
-// output of calls to functions within contracts
-func (cc *ContractChaincode) SetTransactionSerializer(ts serializer.TransactionSerializer) {
-	cc.transactionSerializer = ts
 }
 
 // Init is called during Instantiate transaction after the chaincode container
@@ -159,7 +138,7 @@ func (cc *ContractChaincode) Invoke(stub shim.ChaincodeStubInterface) peer.Respo
 	var fn string
 
 	if li == -1 {
-		ns = cc.defaultContract
+		ns = cc.DefaultContract
 		fn = nsFcn
 	} else {
 		ns = nsFcn[:li]
@@ -206,7 +185,7 @@ func (cc *ContractChaincode) Invoke(stub shim.ChaincodeStubInterface) peer.Respo
 	var successIFace interface{}
 	var errorReturn error
 
-	serializer := cc.transactionSerializer
+	serializer := cc.TransactionSerializer
 
 	if _, ok := nsContract.functions[fn]; !ok {
 		unknownTransaction := nsContract.unknownTransaction
@@ -331,8 +310,8 @@ func (cc *ContractChaincode) addContract(contract ContractInterface, excludeFunc
 
 	cc.contracts[ns] = ccn
 
-	if cc.defaultContract == "" {
-		cc.defaultContract = ns
+	if cc.DefaultContract == "" {
+		cc.DefaultContract = ns
 	}
 
 	return nil
@@ -341,8 +320,8 @@ func (cc *ContractChaincode) addContract(contract ContractInterface, excludeFunc
 func (cc *ContractChaincode) reflectMetadata() metadata.ContractChaincodeMetadata {
 	reflectedMetadata := metadata.ContractChaincodeMetadata{}
 	reflectedMetadata.Contracts = make(map[string]metadata.ContractMetadata)
-	reflectedMetadata.Info.Version = cc.version
-	reflectedMetadata.Info.Title = cc.title
+	reflectedMetadata.Info.Version = cc.Version
+	reflectedMetadata.Info.Title = cc.Title
 	reflectedMetadata.Components.Schemas = make(map[string]metadata.ObjectMetadata)
 
 	if reflectedMetadata.Info.Version == "" {

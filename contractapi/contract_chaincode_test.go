@@ -111,6 +111,16 @@ func (cc *customContext) ReturnString() string {
 	return "I am custom context"
 }
 
+type ignorableFuncContract struct {
+	goodContract
+}
+
+func (gifc *ignorableFuncContract) IgnoreMe() {}
+
+func (gifc *ignorableFuncContract) GetIgnoredFunctions() []string {
+	return []string{"IgnoreMe"}
+}
+
 type evaluateContract struct {
 	myContract
 }
@@ -149,19 +159,19 @@ func testContractChaincodeContractMatchesContract(t *testing.T, actual contractC
 	}
 }
 
-func callContractFunctionAndCheckError(t *testing.T, cc ContractChaincode, arguments []string, callType string, expectedMessage string) {
+func callContractFunctionAndCheckError(t *testing.T, cc *ContractChaincode, arguments []string, callType string, expectedMessage string) {
 	t.Helper()
 
 	callContractFunctionAndCheckResponse(t, cc, arguments, callType, expectedMessage, "error")
 }
 
-func callContractFunctionAndCheckSuccess(t *testing.T, cc ContractChaincode, arguments []string, callType string, expectedMessage string) {
+func callContractFunctionAndCheckSuccess(t *testing.T, cc *ContractChaincode, arguments []string, callType string, expectedMessage string) {
 	t.Helper()
 
 	callContractFunctionAndCheckResponse(t, cc, arguments, callType, expectedMessage, "success")
 }
 
-func callContractFunctionAndCheckResponse(t *testing.T, cc ContractChaincode, arguments []string, callType string, expectedMessage string, expectedType string) {
+func callContractFunctionAndCheckResponse(t *testing.T, cc *ContractChaincode, arguments []string, callType string, expectedMessage string, expectedType string) {
 	t.Helper()
 
 	args := [][]byte{}
@@ -170,7 +180,7 @@ func callContractFunctionAndCheckResponse(t *testing.T, cc ContractChaincode, ar
 		args = append(args, arg)
 	}
 
-	mockStub := shimtest.NewMockStub("smartContractTest", &cc)
+	mockStub := shimtest.NewMockStub("smartContractTest", cc)
 
 	var response peer.Response
 
@@ -194,7 +204,7 @@ func callContractFunctionAndCheckResponse(t *testing.T, cc ContractChaincode, ar
 func testCallingContractFunctions(t *testing.T, callType string) {
 	t.Helper()
 
-	var cc ContractChaincode
+	var cc *ContractChaincode
 
 	gc := goodContract{}
 	cc, _ = CreateNewChaincode(&gc)
@@ -206,7 +216,7 @@ func testCallingContractFunctions(t *testing.T, callType string) {
 	callContractFunctionAndCheckError(t, cc, []string{"goodContract:"}, callType, "Blank function name passed")
 
 	// should return error when function not known and no unknown transaction specified
-	gc.SetName("customname")
+	gc.Name = "customname"
 	cc, _ = CreateNewChaincode(&gc)
 	callContractFunctionAndCheckError(t, cc, []string{"customname:somebadfunctionname"}, callType, "Function somebadfunctionname not found in contract customname")
 
@@ -229,53 +239,53 @@ func testCallingContractFunctions(t *testing.T, callType string) {
 	callContractFunctionAndCheckError(t, cc, []string{"goodContract:ReturnsError"}, callType, gc.ReturnsError().Error())
 
 	// Should return error when function unknown and set unknown function returns error
-	gc.SetUnknownTransaction(gc.ReturnsError)
+	gc.UnknownTransaction = gc.ReturnsError
 	cc, _ = CreateNewChaincode(&gc)
 	callContractFunctionAndCheckError(t, cc, []string{"goodContract:somebadfunctionname"}, callType, gc.ReturnsError().Error())
 	gc = goodContract{}
 
 	// Should return success when function unknown and set unknown function returns no error
-	gc.SetUnknownTransaction(gc.ReturnsString)
+	gc.UnknownTransaction = gc.ReturnsString
 	cc, _ = CreateNewChaincode(&gc)
 	callContractFunctionAndCheckSuccess(t, cc, []string{"goodContract:somebadfunctionname"}, callType, gc.ReturnsString())
 	gc = goodContract{}
 
 	// Should return error when before function returns error and not call main function
-	gc.SetBeforeTransaction(gc.ReturnsError)
+	gc.BeforeTransaction = gc.ReturnsError
 	cc, _ = CreateNewChaincode(&gc)
 	callContractFunctionAndCheckError(t, cc, []string{"goodContract:ReturnsString"}, callType, gc.ReturnsError().Error())
 	gc = goodContract{}
 
 	// Should return success from passed function when before function returns no error
-	gc.SetBeforeTransaction(gc.ReturnsString)
+	gc.BeforeTransaction = gc.ReturnsString
 	cc, _ = CreateNewChaincode(&gc)
 	callContractFunctionAndCheckSuccess(t, cc, []string{"goodContract:ReturnsString"}, callType, gc.ReturnsString())
 	gc = goodContract{}
 
 	// Should return error when after function returns error
-	gc.SetAfterTransaction(gc.ReturnsError)
+	gc.AfterTransaction = gc.ReturnsError
 	cc, _ = CreateNewChaincode(&gc)
 	callContractFunctionAndCheckError(t, cc, []string{"goodContract:ReturnsString"}, callType, gc.ReturnsError().Error())
 	gc = goodContract{}
 
 	// Should return success from passed function when before function returns error
-	gc.SetAfterTransaction(gc.ReturnsString)
+	gc.AfterTransaction = gc.ReturnsString
 	cc, _ = CreateNewChaincode(&gc)
 	callContractFunctionAndCheckSuccess(t, cc, []string{"goodContract:ReturnsString"}, callType, gc.ReturnsString())
 	gc = goodContract{}
 
 	// Should call before, named then after functions in order and pass name response
-	gc.SetBeforeTransaction(gc.logBefore)
-	gc.SetAfterTransaction(gc.logAfter)
+	gc.BeforeTransaction = gc.logBefore
+	gc.AfterTransaction = gc.logAfter
 	cc, _ = CreateNewChaincode(&gc)
 	callContractFunctionAndCheckSuccess(t, cc, []string{"goodContract:LogNamed"}, callType, "named response")
 	assert.Equal(t, []string{"Before function called", "Named function called", "After function called with named response"}, gc.called, "Expected called field of goodContract to have logged in order before, named then after")
 	gc = goodContract{}
 
 	// Should call before, unknown then after functions in order and pass unknown response
-	gc.SetBeforeTransaction(gc.logBefore)
-	gc.SetAfterTransaction(gc.logAfter)
-	gc.SetUnknownTransaction(gc.logUnknown)
+	gc.BeforeTransaction = gc.logBefore
+	gc.AfterTransaction = gc.logAfter
+	gc.UnknownTransaction = gc.logUnknown
 	cc, _ = CreateNewChaincode(&gc)
 	callContractFunctionAndCheckSuccess(t, cc, []string{"goodContract:somebadfunctionname"}, callType, "")
 	assert.Equal(t, []string{"Before function called", "Unknown function called", "After function called with <nil>"}, gc.called, "Expected called field of goodContract to have logged in order before, named then after")
@@ -287,24 +297,24 @@ func testCallingContractFunctions(t *testing.T, callType string) {
 	callContractFunctionAndCheckSuccess(t, cc, []string{"goodContract:CheckContextStub"}, callType, "Stub as expected")
 
 	sc := goodContractCustomContext{}
-	sc.SetTransactionContextHandler(new(customContext))
+	sc.TransactionContextHandler = new(customContext)
 	cc, _ = CreateNewChaincode(&sc)
 
 	//should use a custom transaction context when one is set
 	callContractFunctionAndCheckSuccess(t, cc, []string{"goodContractCustomContext:CheckCustomContext"}, callType, "I am custom context")
 
 	//should use same ctx for all calls
-	sc.SetBeforeTransaction(sc.SetValInCustomContext)
+	sc.BeforeTransaction = sc.SetValInCustomContext
 	cc, _ = CreateNewChaincode(&sc)
 	callContractFunctionAndCheckSuccess(t, cc, []string{"goodContractCustomContext:GetValInCustomContext", standardValue}, callType, standardValue)
 
-	sc.SetAfterTransaction(sc.GetValInCustomContext)
+	sc.AfterTransaction = sc.GetValInCustomContext
 	cc, _ = CreateNewChaincode(&sc)
 	callContractFunctionAndCheckError(t, cc, []string{"goodContractCustomContext:SetValInCustomContext", "some other value"}, callType, "I wanted a standard value")
 
 	// should use transaction serializer
 	cc, _ = CreateNewChaincode(&gc)
-	cc.SetTransactionSerializer(new(mockSerializer))
+	cc.TransactionSerializer = new(mockSerializer)
 	callContractFunctionAndCheckSuccess(t, cc, []string{"goodContract:ReturnsString"}, callType, "GOODBYE WORLD")
 }
 
@@ -322,39 +332,6 @@ func (ms *mockSerializer) ToString(reflect.Value, reflect.Type, *spec.Schema, *m
 // TESTS
 // ================================
 
-func TestSetTitle(t *testing.T) {
-	cc := ContractChaincode{}
-	cc.SetTitle("some title")
-
-	assert.Equal(t, "some title", cc.title, "should set the title")
-}
-
-func TestSetChaincodeVersion(t *testing.T) {
-	cc := ContractChaincode{}
-	cc.SetVersion("some version")
-
-	assert.Equal(t, "some version", cc.version, "should set the version")
-}
-
-func TestSetDefault(t *testing.T) {
-	c := new(myContract)
-	c.SetName("some name")
-
-	cc := ContractChaincode{}
-	cc.SetDefault(c)
-
-	assert.Equal(t, "some name", cc.defaultContract, "should set the default contract name")
-}
-
-func TestSetTransactionSerializer(t *testing.T) {
-	s := new(mockSerializer)
-
-	cc := ContractChaincode{}
-	cc.SetTransactionSerializer(s)
-
-	assert.Equal(t, s, cc.transactionSerializer, "should set the transaction serializer passed")
-}
-
 func TestReflectMetadata(t *testing.T) {
 	var reflectedMetadata metadata.ContractChaincodeMetadata
 
@@ -363,8 +340,8 @@ func TestReflectMetadata(t *testing.T) {
 	ctx := reflect.TypeOf(TransactionContext{})
 
 	cc := ContractChaincode{
-		title:   "some chaincode",
-		version: "1.0.0",
+		Title:   "some chaincode",
+		Version: "1.0.0",
 	}
 
 	cf, _ := internal.NewContractFunctionFromFunc(goodMethod, internal.CallTypeEvaluate, ctx)
@@ -401,17 +378,17 @@ func TestReflectMetadata(t *testing.T) {
 	assert.Equal(t, expectedMetadata, reflectedMetadata, "should return contract chaincode metadata")
 
 	expectedMetadata.Info.Version = "latest"
-	cc.version = ""
+	cc.Version = ""
 	expectedMetadata.Info.Title = "undefined"
-	cc.title = ""
+	cc.Title = ""
 	reflectedMetadata = cc.reflectMetadata()
 	assert.Equal(t, expectedMetadata, reflectedMetadata, "should sub in value for title and version when not set")
 }
 
 func TestAugmentMetadata(t *testing.T) {
 	cc := ContractChaincode{
-		title:   "some chaincode",
-		version: "1.0.0",
+		Title:   "some chaincode",
+		Version: "1.0.0",
 	}
 
 	cc.augmentMetadata()
@@ -443,7 +420,7 @@ func TestAddContract(t *testing.T) {
 	cc.contracts = make(map[string]contractChaincodeContract)
 	cc.contracts["customname"] = contractChaincodeContract{}
 	mc = new(myContract)
-	mc.SetName("customname")
+	mc.Name = "customname"
 	err = cc.addContract(mc, []string{})
 	assert.EqualError(t, err, "Multiple contracts being merged into chaincode with name customname", "should error when contract already exists with name")
 
@@ -455,7 +432,7 @@ func TestAddContract(t *testing.T) {
 	cc.contracts = make(map[string]contractChaincodeContract)
 	cc.contracts["anotherContract"] = existingCCC
 	mc = new(myContract)
-	err = cc.addContract(mc, append(defaultExcludes, mc.GetIgnoredFunctions()...))
+	err = cc.addContract(mc, defaultExcludes)
 	assert.Nil(t, err, "should not error when adding contract using default name")
 	assert.Equal(t, existingCCC, cc.contracts["anotherContract"], "should not affect existing contract in map")
 	testContractChaincodeContractMatchesContract(t, cc.contracts["myContract"], expectedCCC)
@@ -464,8 +441,8 @@ func TestAddContract(t *testing.T) {
 	cc = new(ContractChaincode)
 	cc.contracts = make(map[string]contractChaincodeContract)
 	mc = new(myContract)
-	mc.SetName("customname")
-	err = cc.addContract(mc, append(defaultExcludes, mc.GetIgnoredFunctions()...))
+	mc.Name = "customname"
+	err = cc.addContract(mc, defaultExcludes)
 	assert.Nil(t, err, "should not error when adding contract using custom name")
 	testContractChaincodeContractMatchesContract(t, cc.contracts["customname"], expectedCCC)
 
@@ -473,9 +450,9 @@ func TestAddContract(t *testing.T) {
 	cc = new(ContractChaincode)
 	cc.contracts = make(map[string]contractChaincodeContract)
 	mc = new(myContract)
-	mc.SetVersion("1.1.0")
+	mc.Version = "1.1.0"
 	expectedCCC.version = "1.1.0"
-	err = cc.addContract(mc, append(defaultExcludes, mc.GetIgnoredFunctions()...))
+	err = cc.addContract(mc, defaultExcludes)
 	assert.Nil(t, err, "should not error when adding contract using version")
 	testContractChaincodeContractMatchesContract(t, cc.contracts["myContract"], expectedCCC)
 	expectedCCC.version = "latest"
@@ -486,7 +463,7 @@ func TestAddContract(t *testing.T) {
 	oldFunc := expectedCCC.functions["ReturnsString"]
 	expectedCCC.functions["ReturnsString"], _ = internal.NewContractFunctionFromFunc(mc.ReturnsString, internal.CallTypeEvaluate, transactionContextPtrHandler)
 	ec := new(evaluateContract)
-	err = cc.addContract(ec, append(defaultExcludes, ec.GetIgnoredFunctions()...))
+	err = cc.addContract(ec, defaultExcludes)
 	assert.Nil(t, err, "should not error when adding contract using version")
 	testContractChaincodeContractMatchesContract(t, cc.contracts["evaluateContract"], expectedCCC)
 	expectedCCC.functions["ReturnsString"] = oldFunc
@@ -495,9 +472,9 @@ func TestAddContract(t *testing.T) {
 	cc = new(ContractChaincode)
 	cc.contracts = make(map[string]contractChaincodeContract)
 	mc = new(myContract)
-	mc.SetBeforeTransaction(tx.Handler)
+	mc.BeforeTransaction = tx.Handler
 	expectedCCC.beforeTransaction, _ = internal.NewTransactionHandler(tx.Handler, transactionContextPtrHandler, internal.TransactionHandlerTypeBefore)
-	err = cc.addContract(mc, append(defaultExcludes, mc.GetIgnoredFunctions()...))
+	err = cc.addContract(mc, defaultExcludes)
 	assert.Nil(t, err, "should not error when adding contract using before tx")
 	testContractChaincodeContractMatchesContract(t, cc.contracts["myContract"], expectedCCC)
 
@@ -505,9 +482,9 @@ func TestAddContract(t *testing.T) {
 	cc = new(ContractChaincode)
 	cc.contracts = make(map[string]contractChaincodeContract)
 	mc = new(myContract)
-	mc.SetAfterTransaction(tx.Handler)
+	mc.AfterTransaction = tx.Handler
 	expectedCCC.afterTransaction, _ = internal.NewTransactionHandler(tx.Handler, transactionContextPtrHandler, internal.TransactionHandlerTypeBefore)
-	err = cc.addContract(mc, append(defaultExcludes, mc.GetIgnoredFunctions()...))
+	err = cc.addContract(mc, defaultExcludes)
 	assert.Nil(t, err, "should not error when adding contract using after tx")
 	testContractChaincodeContractMatchesContract(t, cc.contracts["myContract"], expectedCCC)
 
@@ -515,9 +492,9 @@ func TestAddContract(t *testing.T) {
 	cc = new(ContractChaincode)
 	cc.contracts = make(map[string]contractChaincodeContract)
 	mc = new(myContract)
-	mc.SetUnknownTransaction(tx.Handler)
+	mc.UnknownTransaction = tx.Handler
 	expectedCCC.unknownTransaction, _ = internal.NewTransactionHandler(tx.Handler, transactionContextPtrHandler, internal.TransactionHandlerTypeBefore)
-	err = cc.addContract(mc, append(defaultExcludes, mc.GetIgnoredFunctions()...))
+	err = cc.addContract(mc, defaultExcludes)
 	assert.Nil(t, err, "should not error when adding contract using unknown tx")
 	testContractChaincodeContractMatchesContract(t, cc.contracts["myContract"], expectedCCC)
 
@@ -525,7 +502,7 @@ func TestAddContract(t *testing.T) {
 	cc = new(ContractChaincode)
 	cc.contracts = make(map[string]contractChaincodeContract)
 	bc := new(badContract)
-	err = cc.addContract(bc, append(defaultExcludes, bc.GetIgnoredFunctions()...))
+	err = cc.addContract(bc, defaultExcludes)
 	_, expectedErr := internal.NewContractFunctionFromFunc(bc.BadMethod, internal.CallTypeSubmit, transactionContextPtrHandler)
 	expectedErrStr := strings.Replace(expectedErr.Error(), "Function", "BadMethod", -1)
 	assert.EqualError(t, err, expectedErrStr, "should error when contract has bad method")
@@ -534,32 +511,32 @@ func TestAddContract(t *testing.T) {
 	cc = new(ContractChaincode)
 	cc.contracts = make(map[string]contractChaincodeContract)
 	mc = new(myContract)
-	mc.SetBeforeTransaction(bc.BadMethod)
+	mc.BeforeTransaction = bc.BadMethod
 	_, expectedErr = internal.NewTransactionHandler(bc.BadMethod, transactionContextPtrHandler, internal.TransactionHandlerTypeBefore)
-	err = cc.addContract(mc, append(defaultExcludes, mc.GetIgnoredFunctions()...))
+	err = cc.addContract(mc, defaultExcludes)
 	assert.EqualError(t, err, expectedErr.Error(), "should error when before transaction is bad method")
 
 	// should error on bad after transaction
 	cc = new(ContractChaincode)
 	cc.contracts = make(map[string]contractChaincodeContract)
 	mc = new(myContract)
-	mc.SetAfterTransaction(bc.BadMethod)
+	mc.AfterTransaction = bc.BadMethod
 	_, expectedErr = internal.NewTransactionHandler(bc.BadMethod, transactionContextPtrHandler, internal.TransactionHandlerTypeAfter)
-	err = cc.addContract(mc, append(defaultExcludes, mc.GetIgnoredFunctions()...))
+	err = cc.addContract(mc, defaultExcludes)
 	assert.EqualError(t, err, expectedErr.Error(), "should error when after transaction is bad method")
 
 	// should error on bad unknown transaction
 	cc = new(ContractChaincode)
 	cc.contracts = make(map[string]contractChaincodeContract)
 	mc = new(myContract)
-	mc.SetUnknownTransaction(bc.BadMethod)
+	mc.UnknownTransaction = bc.BadMethod
 	_, expectedErr = internal.NewTransactionHandler(bc.BadMethod, transactionContextPtrHandler, internal.TransactionHandlerTypeUnknown)
-	err = cc.addContract(mc, append(defaultExcludes, mc.GetIgnoredFunctions()...))
+	err = cc.addContract(mc, defaultExcludes)
 	assert.EqualError(t, err, expectedErr.Error(), "should error when unknown transaction is bad method")
 }
 
 func TestCreateNewChaincode(t *testing.T) {
-	var contractChaincode ContractChaincode
+	var contractChaincode *ContractChaincode
 	var err error
 	var expectedErr error
 
@@ -569,14 +546,19 @@ func TestCreateNewChaincode(t *testing.T) {
 	contractChaincode, err = CreateNewChaincode(new(badContract))
 	expectedErr = cc.addContract(new(badContract), []string{})
 	assert.EqualError(t, err, expectedErr.Error(), "should error when bad contract to be added")
-	assert.Equal(t, contractChaincode, ContractChaincode{}, "should return blank contract chaincode on error")
+	assert.Nil(t, contractChaincode, "should return blank contract chaincode on error")
 
 	contractChaincode, err = CreateNewChaincode(new(myContract), new(evaluateContract))
 	assert.Nil(t, err, "should not error when passed valid contracts")
 	assert.Equal(t, 3, len(contractChaincode.contracts), "should add both passed contracts and system contract")
-	assert.Equal(t, reflect.TypeOf(new(serializer.JSONSerializer)), reflect.TypeOf(contractChaincode.transactionSerializer), "should have set the transaction serializer")
+	assert.Equal(t, reflect.TypeOf(new(serializer.JSONSerializer)), reflect.TypeOf(contractChaincode.TransactionSerializer), "should have set the transaction serializer")
 	setMetadata, _, _ := contractChaincode.contracts[SystemContractName].functions["GetMetadata"].Call(reflect.ValueOf(nil), nil, nil, new(serializer.JSONSerializer))
 	assert.Equal(t, "{\"info\":{\"title\":\"undefined\",\"version\":\"latest\"},\"contracts\":{\"evaluateContract\":{\"info\":{\"title\":\"evaluateContract\",\"version\":\"latest\"},\"name\":\"evaluateContract\",\"transactions\":[{\"returns\":{\"type\":\"string\"},\"tag\":[\"evaluate\"],\"name\":\"ReturnsString\"}]},\"myContract\":{\"info\":{\"title\":\"myContract\",\"version\":\"latest\"},\"name\":\"myContract\",\"transactions\":[{\"returns\":{\"type\":\"string\"},\"tag\":[\"submit\"],\"name\":\"ReturnsString\"}]},\"org.hyperledger.fabric\":{\"info\":{\"title\":\"org.hyperledger.fabric\",\"version\":\"latest\"},\"name\":\"org.hyperledger.fabric\",\"transactions\":[{\"returns\":{\"type\":\"string\"},\"tag\":[\"evaluate\"],\"name\":\"GetMetadata\"}]}},\"components\":{}}", setMetadata, "should set metadata for system contract")
+
+	contractChaincode, err = CreateNewChaincode(new(ignorableFuncContract))
+	_, ok := contractChaincode.contracts["ignorableFuncContract"].functions["IgnoreMe"]
+	assert.Nil(t, err, "should not return error for valid contract with ignores")
+	assert.False(t, ok, "should not include ignored function")
 }
 
 func TestStart(t *testing.T) {
@@ -584,12 +566,12 @@ func TestStart(t *testing.T) {
 
 	cc, _ := CreateNewChaincode(mc)
 
-	assert.EqualError(t, cc.Start(), shim.Start(&cc).Error(), "should call shim.Start()")
+	assert.EqualError(t, cc.Start(), shim.Start(cc).Error(), "should call shim.Start()")
 }
 
 func TestInit(t *testing.T) {
 	cc, _ := CreateNewChaincode(new(myContract))
-	mockStub := shimtest.NewMockStub("blank fcn", &cc)
+	mockStub := shimtest.NewMockStub("blank fcn", cc)
 	assert.Equal(t, shim.Success([]byte("Default initiator successful.")), cc.Init(mockStub), "should just return success on init with no function passed")
 
 	testCallingContractFunctions(t, initType)

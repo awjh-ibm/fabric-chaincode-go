@@ -18,6 +18,10 @@ import (
 // HELPERS
 // ================================
 
+type EmbededType struct {
+	Prop0 string
+}
+
 type simpleStruct struct {
 	Prop1 string
 	prop2 string
@@ -38,18 +42,20 @@ var simpleStructMetadata = ObjectMetadata{
 }
 
 type complexStruct struct {
+	EmbededType
 	Prop1 string
 	Prop2 simpleStruct
 }
 
 var complexStructPropertiesMap = map[string]spec.Schema{
+	"Prop0": *spec.StringProperty(),
 	"Prop1": *spec.StringProperty(),
 	"Prop2": *spec.RefSchema("#/components/schemas/simpleStruct"),
 }
 
 var complexStructMetadata = ObjectMetadata{
 	Properties:           complexStructPropertiesMap,
-	Required:             []string{"Prop1", "Prop2"},
+	Required:             []string{"Prop0", "Prop1", "Prop2"},
 	AdditionalProperties: false,
 }
 

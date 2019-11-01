@@ -3,8 +3,6 @@
 
 package contractapi
 
-import "github.com/awjh-ibm/fabric-chaincode-go/contractapi/serializer"
-
 // IgnoreContractInterface extends ContractInterface and provides additional functionality
 // that can be used to mark which functions should not be accessible by invoking/querying
 // chaincode
@@ -80,86 +78,46 @@ type ContractInterface interface {
 // and name. Can be embedded in user structs to quickly ensure their definition meets
 // the ContractInterface.
 type Contract struct {
-	version            string
-	unknownTransaction interface{}
-	beforeTransaction  interface{}
-	afterTransaction   interface{}
-	contextHandler     SettableTransactionContextInterface
-	serializer         serializer.TransactionSerializer
-	name               string
-}
-
-// SetVersion sets the version of the contract
-func (c *Contract) SetVersion(version string) {
-	c.version = version
+	Version                   string
+	UnknownTransaction        interface{}
+	BeforeTransaction         interface{}
+	AfterTransaction          interface{}
+	TransactionContextHandler SettableTransactionContextInterface
+	Name                      string
 }
 
 // GetVersion returns the version of the contract
 func (c *Contract) GetVersion() string {
-	return c.version
-}
-
-// SetUnknownTransaction sets function for contract's unknownTransaction.
-func (c *Contract) SetUnknownTransaction(fn interface{}) {
-	c.unknownTransaction = fn
+	return c.Version
 }
 
 // GetUnknownTransaction returns the current set unknownTransaction, may be nil
 func (c *Contract) GetUnknownTransaction() interface{} {
-	return c.unknownTransaction
-}
-
-// SetBeforeTransaction sets function for contract's beforeTransaction.
-func (c *Contract) SetBeforeTransaction(fn interface{}) {
-	c.beforeTransaction = fn
+	return c.UnknownTransaction
 }
 
 // GetBeforeTransaction returns the current set beforeTransaction, may be nil
 func (c *Contract) GetBeforeTransaction() interface{} {
-	return c.beforeTransaction
-}
-
-// SetAfterTransaction sets function for contract's afterTransaction.
-func (c *Contract) SetAfterTransaction(fn interface{}) {
-	c.afterTransaction = fn
+	return c.BeforeTransaction
 }
 
 // GetAfterTransaction returns the current set afterTransaction, may be nil
 func (c *Contract) GetAfterTransaction() interface{} {
-	return c.afterTransaction
-}
-
-// SetName sets the name for the contract.
-func (c *Contract) SetName(name string) {
-	c.name = name
+	return c.AfterTransaction
 }
 
 // GetName returns the current set name for
 // the contract.
 func (c *Contract) GetName() string {
-	return c.name
-}
-
-// SetTransactionContextHandler sets the transaction context type to be used for
-// the contract.
-func (c *Contract) SetTransactionContextHandler(ctx SettableTransactionContextInterface) {
-	c.contextHandler = ctx
+	return c.Name
 }
 
 // GetTransactionContextHandler returns the current transaction context set for
 // the contract. If none has been set then TransactionContext will be returned
 func (c *Contract) GetTransactionContextHandler() SettableTransactionContextInterface {
-	if c.contextHandler == nil {
+	if c.TransactionContextHandler == nil {
 		return new(TransactionContext)
 	}
 
-	return c.contextHandler
-}
-
-// GetIgnoredFunctions returns the list of functions in the default contract
-// that shouldn't be available to users invoking/querying chaincode. Note these
-// functions are still callable by the code just not directly by outside users.
-// Those that match functions in the ChaincodeInterface are ignored by default
-func (c *Contract) GetIgnoredFunctions() []string {
-	return []string{"SetVersion", "SetUnknownTransaction", "SetBeforeTransaction", "SetAfterTransaction", "SetName", "SetTransactionContextHandler"}
+	return c.TransactionContextHandler
 }
