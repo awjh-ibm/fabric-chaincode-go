@@ -9,8 +9,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/go-openapi/spec"
 	"github.com/awjh-ibm/fabric-chaincode-go/contractapi/internal/types"
+	"github.com/go-openapi/spec"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -21,15 +21,19 @@ import (
 type simpleStruct struct {
 	Prop1 string
 	prop2 string
+	prop3 string `metadata:"propname"`
+	Prop4 string `json:"jsonname"`
 }
 
 var simpleStructPropertiesMap = map[string]spec.Schema{
-	"Prop1": *spec.StringProperty(),
+	"Prop1":    *spec.StringProperty(),
+	"propname": *spec.StringProperty(),
+	"jsonname": *spec.StringProperty(),
 }
 
 var simpleStructMetadata = ObjectMetadata{
 	Properties:           simpleStructPropertiesMap,
-	Required:             []string{"Prop1"},
+	Required:             []string{"Prop1", "propname", "jsonname"},
 	AdditionalProperties: false,
 }
 

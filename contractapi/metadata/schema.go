@@ -8,11 +8,14 @@ import (
 	"reflect"
 	"unicode"
 
-	"github.com/go-openapi/spec"
 	"github.com/awjh-ibm/fabric-chaincode-go/contractapi/internal/types"
+	"github.com/go-openapi/spec"
 )
 
-// GetSchema returns the open api spec schema for a given type
+// GetSchema returns the open api spec schema for a given type. For struct types the property
+// name used in the generated schema will be the name of the property unless a metadata or json
+// tag exists for the property. Metadata tags take precedence over json tags. Private properties
+// without a metadata tag will be ignored. Json tags are not used for private properties
 func GetSchema(field reflect.Type, components *ComponentMetadata) (*spec.Schema, error) {
 	var schema *spec.Schema
 	var err error
@@ -93,11 +96,17 @@ func addComponentIfNotExists(obj reflect.Type, components *ComponentMetadata) er
 	schema.AdditionalProperties = false
 
 	for i := 0; i < obj.NumField(); i++ {
-		if obj.Field(i).Name == "" || unicode.IsLower([]rune(obj.Field(i).Name)[0]) {
-			break
+		if obj.Field(i).Name == "" {
+			continue
 		}
 
-		name := obj.Field(i).Tag.Get("json")
+		name := obj.Field(i).Tag.Get("metadata")
+
+		if unicode.IsLower([]rune(obj.Field(i).Name)[0]) && name == "" {
+			continue
+		} else if name == "" {
+			name = obj.Field(i).Tag.Get("json")
+		}
 
 		if name == "" {
 			name = obj.Field(i).Name

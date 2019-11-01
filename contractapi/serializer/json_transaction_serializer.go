@@ -8,10 +8,10 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/go-openapi/spec"
 	"github.com/awjh-ibm/fabric-chaincode-go/contractapi/internal/types"
 	"github.com/awjh-ibm/fabric-chaincode-go/contractapi/internal/utils"
 	"github.com/awjh-ibm/fabric-chaincode-go/contractapi/metadata"
+	"github.com/go-openapi/spec"
 	"github.com/xeipuuv/gojsonschema"
 )
 
