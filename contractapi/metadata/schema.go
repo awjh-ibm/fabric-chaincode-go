@@ -129,13 +129,13 @@ func getFields(field reflect.StructField, schema *ObjectMetadata, components *Co
 
 	name := field.Tag.Get("metadata")
 
-	if unicode.IsLower([]rune(field.Name)[0]) && name == "" {
+	if (unicode.IsLower([]rune(field.Name)[0]) && name == "") || name == "-" {
 		return nil
 	} else if name == "" {
 		name = field.Tag.Get("json")
 	}
 
-	if name == "" {
+	if name == "" || name == "-" {
 		name = field.Name
 	}
 

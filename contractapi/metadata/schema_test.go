@@ -27,17 +27,20 @@ type simpleStruct struct {
 	prop2 string
 	prop3 string `metadata:"propname"`
 	Prop4 string `json:"jsonname"`
+	Prop5 string `json:"-"`
+	Prop6 string `metadata:"-"`
 }
 
 var simpleStructPropertiesMap = map[string]spec.Schema{
 	"Prop1":    *spec.StringProperty(),
 	"propname": *spec.StringProperty(),
 	"jsonname": *spec.StringProperty(),
+	"Prop5":    *spec.StringProperty(),
 }
 
 var simpleStructMetadata = ObjectMetadata{
 	Properties:           simpleStructPropertiesMap,
-	Required:             []string{"Prop1", "propname", "jsonname"},
+	Required:             []string{"Prop1", "propname", "jsonname", "Prop5"},
 	AdditionalProperties: false,
 }
 

@@ -22,7 +22,11 @@ type JSONSerializer struct{}
 // FromString takes a parameter and converts it to a reflect value representing the goal data type. If
 // a schema is passed it will validate that the converted value meets the rules specified by that
 // schema. For complex data structures e.g. structs, arrays etc. the string value passed should be in
-// JSON format
+// JSON format. The default Go JSON unmarshaller is used for converting complex types and as such
+// it does not respect private properties or properties using the contractapi metadata tag by default. If
+// you use either of these in your struct and expect data passed in to use these then you should write
+// your own unmarshall function to handle this for your struct.
+// Docs on how the Go JSON Unmarshaller works: https://golang.org/pkg/encoding/json/
 func (js *JSONSerializer) FromString(param string, fieldType reflect.Type, schema *spec.Schema, components *metadata.ComponentMetadata) (reflect.Value, error) {
 	converted, err := convertArg(fieldType, param)
 
@@ -53,7 +57,11 @@ func (js *JSONSerializer) FromString(param string, fieldType reflect.Type, schem
 
 // ToString takes a reflect value, the type of what the value originally was the schema which the value should adhere to,
 // and components which may be referenced by the schema. Returns a string representation of the original value, complex
-// types such as structs, arrays etc are returned in a JSON format
+// types such as structs, arrays etc are returned in a JSON format. Structs, Arrays, Slices and Maps use the default JSON
+// marshaller for creating the string. For structs this will therefore not include private properties (even if tagged with
+// metadata) in the string or use the metadata tag value for the property name in the produced string by default. To
+// include these within the string whilst using this serializer you should write a custom Marshall function on your struct
+// Docs on how the Go JSON Marshaller works: https://golang.org/pkg/encoding/json/
 func (js *JSONSerializer) ToString(result reflect.Value, resultType reflect.Type, schema *spec.Schema, components *metadata.ComponentMetadata) (string, error) {
 	var str string
 
