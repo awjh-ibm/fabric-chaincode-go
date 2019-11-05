@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/go-openapi/spec"
 	metadata "github.com/awjh-ibm/fabric-chaincode-go/contractapi/metadata"
 	"github.com/awjh-ibm/fabric-chaincode-go/contractapi/serializer"
+	"github.com/go-openapi/spec"
 )
 
 type contractFunctionParams struct {
@@ -99,6 +99,12 @@ func (cf ContractFunction) ReflectMetadata(name string, existingComponents *meta
 	return transactionMetadata
 }
 
+type formatArgResult struct {
+	paramName string
+	converted reflect.Value
+	err       error
+}
+
 func (cf *ContractFunction) formatArgs(ctx reflect.Value, supplementaryMetadata []metadata.ParameterMetadata, components *metadata.ComponentMetadata, params []string, serializer serializer.TransactionSerializer) ([]reflect.Value, error) {
 	numParams := len(cf.params.fields)
 
@@ -118,6 +124,8 @@ func (cf *ContractFunction) formatArgs(ctx reflect.Value, supplementaryMetadata 
 		return nil, fmt.Errorf("Incorrect number of params. Expected %d, received %d", numParams, len(params))
 	}
 
+	channels := []chan formatArgResult{}
+
 	for i := 0; i < numParams; i++ {
 
 		fieldType := cf.params.fields[i]
@@ -131,16 +139,36 @@ func (cf *ContractFunction) formatArgs(ctx reflect.Value, supplementaryMetadata 
 			schema = &supplementaryMetadata[i].Schema
 		}
 
-		converted, err := serializer.FromString(params[i], fieldType, schema, components)
+		c := make(chan formatArgResult)
+		go cf.formatArg(paramName, params[i], fieldType, schema, components, serializer, c)
+		channels = append(channels, c)
+	}
 
-		if err != nil {
-			return nil, fmt.Errorf("Error managing parameter%s. %s", paramName, err.Error())
+	for _, channel := range channels {
+		for res := range channel {
+
+			if res.err != nil {
+				return nil, fmt.Errorf("Error managing parameter%s. %s", res.paramName, res.err.Error())
+			}
+
+			values = append(values, res.converted)
 		}
-
-		values = append(values, converted)
 	}
 
 	return values, nil
+}
+
+func (cf *ContractFunction) formatArg(paramName string, param string, fieldType reflect.Type, schema *spec.Schema, components *metadata.ComponentMetadata, serializer serializer.TransactionSerializer, c chan formatArgResult) {
+	defer close(c)
+
+	converted, err := serializer.FromString(param, fieldType, schema, components)
+
+	res := new(formatArgResult)
+	res.paramName = paramName
+	res.converted = converted
+	res.err = err
+
+	c <- *res
 }
 
 func (cf *ContractFunction) handleResponse(response []reflect.Value, supplementaryMetadata *spec.Schema, components *metadata.ComponentMetadata, serializer serializer.TransactionSerializer) (string, interface{}, error) {
