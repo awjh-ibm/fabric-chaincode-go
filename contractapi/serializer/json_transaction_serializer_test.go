@@ -4,6 +4,7 @@
 package serializer
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"testing"
@@ -188,6 +189,11 @@ func TestConvertArg(t *testing.T) {
 	testConvertArgsComplexType(t, make(map[string]bool), "{\"a\": true, \"b\": false}")
 	testConvertArgsComplexType(t, simpleStruct{}, "{\"Prop1\": \"hello\"}")
 	testConvertArgsComplexType(t, &simpleStruct{}, "{\"Prop1\": \"hello\"}")
+
+	// should handle error interface
+	actualValue, actualErr = convertArg(types.ErrorType, "some error")
+	assert.Nil(t, actualErr, "should not return error for error type")
+	assert.Equal(t, errors.New("some error"), actualValue.Interface(), "should create error using string for error type")
 }
 
 func TestValidateAgainstSchema(t *testing.T) {

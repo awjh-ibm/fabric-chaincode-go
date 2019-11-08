@@ -60,32 +60,31 @@ func typeInSlice(a reflect.Type, list []reflect.Type) bool {
 }
 
 func typeIsValid(t reflect.Type, additionalTypes []reflect.Type) error {
-	additionalTypesString := []string{}
-
-	for _, el := range additionalTypes {
-		additionalTypesString = append(additionalTypesString, el.String())
-	}
-
 	if t.Kind() == reflect.Array {
 		array := reflect.New(t).Elem()
 		return arrayOfValidType(array, additionalTypes)
 	} else if t.Kind() == reflect.Slice {
 		slice := reflect.MakeSlice(t, 1, 1)
-		return typeIsValid(slice.Index(0).Type(), []reflect.Type{}) // additional types only used to allow error return so don't want arrays of errors
+		return typeIsValid(slice.Index(0).Type(), additionalTypes)
 	} else if t.Kind() == reflect.Map {
 		if t.Key().Kind() != reflect.String {
 			return fmt.Errorf("Map key type %s is not valid. Expected string", t.Key().String())
 		}
 
-		return typeIsValid(t.Elem(), []reflect.Type{})
+		return typeIsValid(t.Elem(), additionalTypes)
 	} else if (t.Kind() == reflect.Struct || (t.Kind() == reflect.Ptr && t.Elem().Kind() == reflect.Struct)) && !typeInSlice(t, additionalTypes) {
-		return structOfValidType(t, additionalTypes)
-	} else if _, ok := types.BasicTypes[t.Kind()]; (!ok || (t.Kind() == reflect.Interface && t.String() != "interface {}")) && !typeInSlice(t, additionalTypes) {
-		if len(additionalTypes) > 0 {
-			return fmt.Errorf("Type %s is not valid. Expected a struct, one of the basic types %s, an array/slice of these, or one of these additional types %s", t.String(), listBasicTypes(), sliceAsCommaSentence(additionalTypesString))
-		}
+		additionalTypes = append(additionalTypes, t)
 
-		return fmt.Errorf("Type %s is not valid. Expected a struct or one of the basic types %s or an array/slice of these", t.String(), listBasicTypes())
+		if t.Kind() != reflect.Ptr {
+			additionalTypes = append(additionalTypes, reflect.PtrTo(t))
+		} else {
+			additionalTypes = append(additionalTypes, t.Elem())
+		}
+		// add self for cyclic
+
+		return structOfValidType(t, additionalTypes)
+	} else if _, ok := types.BasicTypes[t.Kind()]; (!ok || (t.Kind() == reflect.Interface && t.String() != "interface {}" && t.String() != "error")) && !typeInSlice(t, additionalTypes) {
+		return fmt.Errorf("Type %s is not valid. Expected a struct or one of the basic types error, %s or an array/slice of these", t.String(), listBasicTypes())
 	}
 
 	return nil

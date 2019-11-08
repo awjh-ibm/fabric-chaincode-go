@@ -6,6 +6,7 @@ package metadata
 import (
 	"fmt"
 	"reflect"
+	"strings"
 	"unicode"
 
 	"github.com/awjh-ibm/fabric-chaincode-go/contractapi/internal/types"
@@ -17,6 +18,10 @@ import (
 // tag exists for the property. Metadata tags take precedence over json tags. Private properties
 // without a metadata tag will be ignored. Json tags are not used for private properties
 func GetSchema(field reflect.Type, components *ComponentMetadata) (*spec.Schema, error) {
+	return getSchema(field, components, false)
+}
+
+func getSchema(field reflect.Type, components *ComponentMetadata, nested bool) (*spec.Schema, error) {
 	var schema *spec.Schema
 	var err error
 
@@ -28,7 +33,7 @@ func GetSchema(field reflect.Type, components *ComponentMetadata) (*spec.Schema,
 		} else if field.Kind() == reflect.Map {
 			schema, err = buildMapSchema(reflect.MakeMap(field), components)
 		} else if field.Kind() == reflect.Struct || (field.Kind() == reflect.Ptr && field.Elem().Kind() == reflect.Struct) {
-			schema, err = buildStructSchema(field, components)
+			schema, err = buildStructSchema(field, components, nested)
 		} else {
 			return nil, fmt.Errorf("%s was not a valid type", field.String())
 		}
@@ -91,32 +96,36 @@ func addComponentIfNotExists(obj reflect.Type, components *ComponentMetadata) er
 	}
 
 	schema := ObjectMetadata{}
+	schema.ID = obj.Name()
 	schema.Required = []string{}
 	schema.Properties = make(map[string]spec.Schema)
 	schema.AdditionalProperties = false
-
-	for i := 0; i < obj.NumField(); i++ {
-		err := getFields(obj.Field(i), &schema, components)
-
-		if err != nil {
-			return err
-		}
-	}
 
 	if components.Schemas == nil {
 		components.Schemas = make(map[string]ObjectMetadata)
 	}
 
-	components.Schemas[obj.Name()] = schema
+	components.Schemas[obj.Name()] = schema // lock up slot for cyclic
+
+	for i := 0; i < obj.NumField(); i++ {
+		err := getField(obj.Field(i), &schema, components)
+
+		if err != nil {
+			delete(components.Schemas, obj.Name())
+			return err
+		}
+	}
+
+	components.Schemas[obj.Name()] = schema // include changes
 
 	return nil
 }
 
-func getFields(field reflect.StructField, schema *ObjectMetadata, components *ComponentMetadata) error {
+func getField(field reflect.StructField, schema *ObjectMetadata, components *ComponentMetadata) error {
 	if field.Anonymous {
 		if field.Type.Kind() == reflect.Struct {
 			for i := 0; i < field.Type.NumField(); i++ {
-				err := getFields(field.Type.Field(i), schema, components)
+				err := getField(field.Type.Field(i), schema, components)
 
 				if err != nil {
 					return err
@@ -128,6 +137,19 @@ func getFields(field reflect.StructField, schema *ObjectMetadata, components *Co
 	}
 
 	name := field.Tag.Get("metadata")
+	required := true
+
+	if strings.Contains(name, ",") {
+		spl := strings.Split(name, ",")
+
+		name = spl[0]
+
+		for _, val := range spl[1:] {
+			if strings.TrimSpace(val) == "optional" {
+				required = false
+			}
+		}
+	}
 
 	if (unicode.IsLower([]rune(field.Name)[0]) && name == "") || name == "-" {
 		return nil
@@ -141,20 +163,22 @@ func getFields(field reflect.StructField, schema *ObjectMetadata, components *Co
 
 	var err error
 
-	propSchema, err := GetSchema(field.Type, components)
+	propSchema, err := getSchema(field.Type, components, true)
 
 	if err != nil {
 		return err
 	}
 
-	schema.Required = append(schema.Required, name)
+	if required {
+		schema.Required = append(schema.Required, name)
+	}
 
 	schema.Properties[name] = *propSchema
 
 	return nil
 }
 
-func buildStructSchema(obj reflect.Type, components *ComponentMetadata) (*spec.Schema, error) {
+func buildStructSchema(obj reflect.Type, components *ComponentMetadata, nested bool) (*spec.Schema, error) {
 	if obj.Kind() == reflect.Ptr {
 		obj = obj.Elem()
 	}
@@ -165,5 +189,11 @@ func buildStructSchema(obj reflect.Type, components *ComponentMetadata) (*spec.S
 		return nil, err
 	}
 
-	return spec.RefSchema("#/components/schemas/" + obj.Name()), nil
+	refPath := "#/components/schemas/"
+
+	if nested {
+		refPath = ""
+	}
+
+	return spec.RefSchema(refPath + obj.Name()), nil
 }

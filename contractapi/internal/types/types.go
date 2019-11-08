@@ -353,3 +353,6 @@ var BasicTypes = map[reflect.Kind]basicType{
 	reflect.Uint64:    new(uint64Type),
 	reflect.Interface: new(interfaceType),
 }
+
+// ErrorType reflect type for errors
+var ErrorType = reflect.TypeOf((*error)(nil)).Elem()

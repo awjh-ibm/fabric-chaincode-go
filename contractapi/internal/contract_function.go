@@ -10,6 +10,7 @@ import (
 
 	metadata "github.com/awjh-ibm/fabric-chaincode-go/contractapi/metadata"
 	"github.com/awjh-ibm/fabric-chaincode-go/contractapi/serializer"
+	"github.com/awjh-ibm/fabric-chaincode-go/contractapi/internal/types"
 )
 
 type contractFunctionParams struct {
@@ -162,7 +163,7 @@ func (cf *ContractFunction) formatArg(param string, fieldType reflect.Type, para
 	paramName := ""
 
 	if parameterMetadata != nil {
-		paramName = parameterMetadata.Name
+		paramName = " " + parameterMetadata.Name
 	}
 
 	res := new(formatArgResult)
@@ -349,13 +350,11 @@ func methodToContractFunctionReturns(typeMethod reflect.Method) (contractFunctio
 	} else if numOut == 1 {
 		outType := typeMethod.Type.Out(0)
 
-		errorType := reflect.TypeOf((*error)(nil)).Elem()
-
-		typeError := typeIsValid(outType, []reflect.Type{errorType})
+		typeError := typeIsValid(outType, nil)
 
 		if typeError != nil {
 			return contractFunctionReturns{}, fmt.Errorf("%s contains invalid single return type. %s", methodName, typeError.Error())
-		} else if outType == errorType {
+		} else if outType == types.ErrorType {
 			return contractFunctionReturns{nil, true}, nil
 		}
 		return contractFunctionReturns{outType, false}, nil
@@ -363,8 +362,8 @@ func methodToContractFunctionReturns(typeMethod reflect.Method) (contractFunctio
 		firstOut := typeMethod.Type.Out(0)
 		secondOut := typeMethod.Type.Out(1)
 
-		firstTypeError := typeIsValid(firstOut, []reflect.Type{})
-		if firstTypeError != nil {
+		firstTypeError := typeIsValid(firstOut, nil)
+		if firstTypeError != nil && firstOut != types.ErrorType {
 			return contractFunctionReturns{}, fmt.Errorf("%s contains invalid first return type. %s", methodName, firstTypeError.Error())
 		} else if secondOut.String() != "error" {
 			return contractFunctionReturns{}, fmt.Errorf("%s contains invalid second return type. Type %s is not valid. Expected error", methodName, secondOut.String())

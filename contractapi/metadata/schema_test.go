@@ -26,9 +26,11 @@ type simpleStruct struct {
 	Prop1 string
 	prop2 string
 	prop3 string `metadata:"propname"`
-	Prop4 string `json:"jsonname"`
+	Prop4 string `json:"jsonname" metadata:",optional"`
 	Prop5 string `json:"-"`
 	Prop6 string `metadata:"-"`
+	Prop7 string `metadata:",optional"`
+	Prop8 string `metadata:"prop8, optional"`
 }
 
 var simpleStructPropertiesMap = map[string]spec.Schema{
@@ -36,11 +38,14 @@ var simpleStructPropertiesMap = map[string]spec.Schema{
 	"propname": *spec.StringProperty(),
 	"jsonname": *spec.StringProperty(),
 	"Prop5":    *spec.StringProperty(),
+	"Prop7":    *spec.StringProperty(),
+	"prop8":    *spec.StringProperty(),
 }
 
 var simpleStructMetadata = ObjectMetadata{
+	ID:                   "simpleStruct",
 	Properties:           simpleStructPropertiesMap,
-	Required:             []string{"Prop1", "propname", "jsonname", "Prop5"},
+	Required:             []string{"Prop1", "propname", "Prop5"},
 	AdditionalProperties: false,
 }
 
@@ -48,15 +53,18 @@ type complexStruct struct {
 	EmbededType
 	Prop1 string
 	Prop2 simpleStruct
+	Prop3 *complexStruct `metadata:",optional"`
 }
 
 var complexStructPropertiesMap = map[string]spec.Schema{
 	"Prop0": *spec.StringProperty(),
 	"Prop1": *spec.StringProperty(),
-	"Prop2": *spec.RefSchema("#/components/schemas/simpleStruct"),
+	"Prop2": *spec.RefSchema("simpleStruct"),
+	"Prop3": *spec.RefSchema("complexStruct"),
 }
 
 var complexStructMetadata = ObjectMetadata{
+	ID:                   "complexStruct",
 	Properties:           complexStructPropertiesMap,
 	Required:             []string{"Prop0", "Prop1", "Prop2"},
 	AdditionalProperties: false,
@@ -202,19 +210,25 @@ func TestBuildStructSchema(t *testing.T) {
 	components := new(ComponentMetadata)
 	components.Schemas = make(map[string]ObjectMetadata)
 
-	schema, err = buildStructSchema(reflect.TypeOf(badStruct{}), components)
+	schema, err = buildStructSchema(reflect.TypeOf(badStruct{}), components, false)
 	expectedErr := addComponentIfNotExists(reflect.TypeOf(badStruct{}), components)
-	assert.Nil(t, schema, "spec should be nil when buildArrayOrSliceSchema fails from buildSliceSchema")
+	assert.Nil(t, schema, "spec should be nil when buildStructSchema fails from addComponentIfNotExists")
 	assert.NotNil(t, err, "error should not be nil")
-	assert.Equal(t, expectedErr, err, "should have same error as buildArrayOrSliceSchema")
+	assert.Equal(t, expectedErr, err, "should have same error as addComponentIfNotExists")
 
-	schema, err = buildStructSchema(reflect.TypeOf(simpleStruct{}), components)
+	schema, err = buildStructSchema(reflect.TypeOf(simpleStruct{}), components, false)
 	assert.Nil(t, err, "should not return error when struct is good")
 	assert.Equal(t, schema, spec.RefSchema("#/components/schemas/simpleStruct"), "should make schema ref to component")
 	_, ok := components.Schemas["simpleStruct"]
 	assert.True(t, ok, "should have added component")
 
-	schema, err = buildStructSchema(reflect.TypeOf(new(simpleStruct)), components)
+	schema, err = buildStructSchema(reflect.TypeOf(simpleStruct{}), components, true)
+	assert.Nil(t, err, "should not return error when struct is good")
+	assert.Equal(t, schema, spec.RefSchema("simpleStruct"), "should make schema ref to component for nested ref")
+	_, ok = components.Schemas["simpleStruct"]
+	assert.True(t, ok, "should have added component for nested ref")
+
+	schema, err = buildStructSchema(reflect.TypeOf(new(simpleStruct)), components, false)
 	assert.Nil(t, err, "should not return error when pointer to struct is good")
 	assert.Equal(t, schema, spec.RefSchema("#/components/schemas/simpleStruct"), "should make schema ref to component")
 
@@ -249,7 +263,7 @@ func TestGetSchema(t *testing.T) {
 	assert.Nil(t, schema, "should return no schema when build map errors")
 
 	schema, err = GetSchema(reflect.TypeOf(badStruct{}), components)
-	_, expectedErr = buildStructSchema(reflect.TypeOf(badStruct{}), components)
+	_, expectedErr = buildStructSchema(reflect.TypeOf(badStruct{}), components, false)
 	assert.EqualError(t, err, expectedErr.Error(), "should return error when build struct errors")
 	assert.Nil(t, schema, "should return no schema when build struct errors")
 

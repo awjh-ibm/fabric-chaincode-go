@@ -221,6 +221,10 @@ func TestCompileSchemas(t *testing.T) {
 		Schema: spec.Int64Property(),
 	}
 
+	nilReturn := ReturnMetadata{
+		Schema: nil,
+	}
+
 	goodParameter1 := ParameterMetadata{
 		Name:   "goodParam1",
 		Schema: spec.RefProperty("#/components/schemas/someComponent"),
@@ -270,6 +274,16 @@ func TestCompileSchemas(t *testing.T) {
 	validateCompiledSchema(t, "goodParam1", make(map[string]interface{}), ccm.Contracts["someContract"].Transactions[0].Parameters[0].CompiledSchema)
 	validateCompiledSchema(t, "goodParam2", "abc", ccm.Contracts["someContract"].Transactions[0].Parameters[1].CompiledSchema)
 	validateCompiledSchema(t, "return", 1, ccm.Contracts["someContract"].Transactions[0].Returns.CompiledSchema)
+
+	someTransaction.Returns = nilReturn
+	someTransaction.Parameters = []ParameterMetadata{goodParameter1, goodParameter2}
+	someContract.Transactions[0] = someTransaction
+	ccm.Contracts["someContract"] = someContract
+	err = ccm.CompileSchemas()
+	assert.Nil(t, err, "should not error on good metadata when return is nil")
+	validateCompiledSchema(t, "goodParam1", make(map[string]interface{}), ccm.Contracts["someContract"].Transactions[0].Parameters[0].CompiledSchema)
+	validateCompiledSchema(t, "goodParam2", "abc", ccm.Contracts["someContract"].Transactions[0].Parameters[1].CompiledSchema)
+	assert.Nil(t, ccm.Contracts["someContract"].Transactions[0].Returns.CompiledSchema, "should set compiled schema nil on no return")
 }
 
 func validateCompiledSchema(t *testing.T, propName string, propValue interface{}, compiledSchema *gojsonschema.Schema) {

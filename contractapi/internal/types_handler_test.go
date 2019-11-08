@@ -15,7 +15,7 @@ import (
 // ================================
 // HELPERS
 // ================================
-const basicErr = "Type %s is not valid. Expected a struct or one of the basic types %s or an array/slice of these"
+const basicErr = "Type %s is not valid. Expected a struct or one of the basic types error, %s or an array/slice of these"
 
 type goodStruct struct {
 	Prop1 string
@@ -130,6 +130,10 @@ func TestTypeIsValid(t *testing.T) {
 
 	type goodStruct4 struct {
 		Prop1 interface{}
+	}
+
+	type goodStruct5 struct {
+		Prop1 *goodStruct5
 	}
 
 	type BadStruct2 struct {
@@ -269,6 +273,8 @@ func TestTypeIsValid(t *testing.T) {
 
 	assert.Nil(t, typeIsValid(reflect.TypeOf(goodStruct3{}), []reflect.Type{}), "should not return an error for a valid struct with struct ptr property")
 
+	assert.Nil(t, typeIsValid(reflect.TypeOf(goodStruct5{}), []reflect.Type{}), "should not return an error for a valid struct with cyclic dependency")
+
 	assert.Nil(t, typeIsValid(badType, []reflect.Type{badType}), "should not error when type not in basic types but is in additional types")
 	assert.Nil(t, typeIsValid(reflect.TypeOf(BadStruct{}), []reflect.Type{reflect.TypeOf(BadStruct{})}), "should not error when bad struct is in additional types")
 	assert.Nil(t, typeIsValid(reflect.TypeOf(BadStruct2{}), []reflect.Type{reflect.TypeOf(BadStruct{})}), "should not error when bad struct is in additional types and passed type has that as property")
@@ -308,8 +314,6 @@ func TestTypeIsValid(t *testing.T) {
 	assert.EqualError(t, typeIsValid(badArrayType, []reflect.Type{badArrayType}), arrayOfValidType(badArr, []reflect.Type{badArrayType}).Error(), "should have returned error for invalid array type")
 
 	assert.EqualError(t, typeIsValid(badSliceType, []reflect.Type{badSliceType}), fmt.Sprintf(basicErr, badType.String(), listBasicTypes()), "should have returned error for invalid slice type")
-
-	assert.EqualError(t, typeIsValid(reflect.TypeOf(BadStruct{}), []reflect.Type{reflect.TypeOf(BadStruct2{})}), fmt.Sprintf("Type %s is not valid. Expected a struct, one of the basic types %s, an array/slice of these, or one of these additional types %s", badType.String(), listBasicTypes(), "internal.BadStruct2"), "should not return error when bad struct is passed but not in list of additional types")
 }
 
 func TestTypeMatchesInterface(t *testing.T) {

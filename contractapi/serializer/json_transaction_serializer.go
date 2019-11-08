@@ -5,6 +5,7 @@ package serializer
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 
@@ -111,7 +112,9 @@ func convertArg(fieldType reflect.Type, paramValue string) (reflect.Value, error
 	var converted reflect.Value
 
 	var err error
-	if fieldType.Kind() == reflect.Array || fieldType.Kind() == reflect.Slice || fieldType.Kind() == reflect.Map || fieldType.Kind() == reflect.Struct || (fieldType.Kind() == reflect.Ptr && fieldType.Elem().Kind() == reflect.Struct) {
+	if fieldType == types.ErrorType {
+		converted = reflect.ValueOf(errors.New(paramValue))
+	} else if fieldType.Kind() == reflect.Array || fieldType.Kind() == reflect.Slice || fieldType.Kind() == reflect.Map || fieldType.Kind() == reflect.Struct || (fieldType.Kind() == reflect.Ptr && fieldType.Elem().Kind() == reflect.Struct) {
 		converted, err = createArraySliceMapOrStruct(paramValue, fieldType)
 	} else {
 		converted, err = types.BasicTypes[fieldType.Kind()].Convert(paramValue)

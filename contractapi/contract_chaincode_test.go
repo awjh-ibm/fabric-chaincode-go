@@ -4,13 +4,13 @@
 package contractapi
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
 	"strings"
 	"testing"
 
-	"github.com/go-openapi/spec"
 	"github.com/awjh-ibm/fabric-chaincode-go/contractapi/internal"
 	"github.com/awjh-ibm/fabric-chaincode-go/contractapi/metadata"
 	"github.com/awjh-ibm/fabric-chaincode-go/contractapi/serializer"
@@ -536,6 +536,22 @@ func TestAddContract(t *testing.T) {
 	assert.EqualError(t, err, expectedErr.Error(), "should error when unknown transaction is bad method")
 }
 
+func jsonCompare(t *testing.T, s1, s2 string) {
+	t.Helper()
+
+	var o1 interface{}
+	var o2 interface{}
+
+	var err error
+	err = json.Unmarshal([]byte(s1), &o1)
+	assert.Nil(t, err, "invalid json supplied for string 1")
+
+	err = json.Unmarshal([]byte(s2), &o2)
+	assert.Nil(t, err, "invalid json supplied for string 2")
+
+	assert.True(t, reflect.DeepEqual(o1, o2), "JSON should be equal")
+}
+
 func TestCreateNewChaincode(t *testing.T) {
 	var contractChaincode *ContractChaincode
 	var err error
@@ -554,7 +570,7 @@ func TestCreateNewChaincode(t *testing.T) {
 	assert.Equal(t, 3, len(contractChaincode.contracts), "should add both passed contracts and system contract")
 	assert.Equal(t, reflect.TypeOf(new(serializer.JSONSerializer)), reflect.TypeOf(contractChaincode.TransactionSerializer), "should have set the transaction serializer")
 	setMetadata, _, _ := contractChaincode.contracts[SystemContractName].functions["GetMetadata"].Call(reflect.ValueOf(nil), nil, nil, new(serializer.JSONSerializer))
-	assert.Equal(t, "{\"info\":{\"title\":\"undefined\",\"version\":\"latest\"},\"contracts\":{\"evaluateContract\":{\"info\":{\"title\":\"evaluateContract\",\"version\":\"latest\"},\"name\":\"evaluateContract\",\"transactions\":[{\"returns\":{\"type\":\"string\"},\"tag\":[\"evaluate\"],\"name\":\"ReturnsString\"}]},\"myContract\":{\"info\":{\"title\":\"myContract\",\"version\":\"latest\"},\"name\":\"myContract\",\"transactions\":[{\"returns\":{\"type\":\"string\"},\"tag\":[\"submit\"],\"name\":\"ReturnsString\"}]},\"org.hyperledger.fabric\":{\"info\":{\"title\":\"org.hyperledger.fabric\",\"version\":\"latest\"},\"name\":\"org.hyperledger.fabric\",\"transactions\":[{\"returns\":{\"type\":\"string\"},\"tag\":[\"evaluate\"],\"name\":\"GetMetadata\"}]}},\"components\":{}}", setMetadata, "should set metadata for system contract")
+	jsonCompare(t, "{\"info\":{\"title\":\"undefined\",\"version\":\"latest\"},\"contracts\":{\"evaluateContract\":{\"info\":{\"title\":\"evaluateContract\",\"version\":\"latest\"},\"name\":\"evaluateContract\",\"transactions\":[{\"returns\":{\"type\":\"string\"},\"tag\":[\"evaluate\"],\"name\":\"ReturnsString\"}]},\"myContract\":{\"info\":{\"title\":\"myContract\",\"version\":\"latest\"},\"name\":\"myContract\",\"transactions\":[{\"returns\":{\"type\":\"string\"},\"tag\":[\"submit\"],\"name\":\"ReturnsString\"}]},\"org.hyperledger.fabric\":{\"info\":{\"title\":\"org.hyperledger.fabric\",\"version\":\"latest\"},\"name\":\"org.hyperledger.fabric\",\"transactions\":[{\"returns\":{\"type\":\"string\"},\"tag\":[\"evaluate\"],\"name\":\"GetMetadata\"}]}},\"components\":{}}", setMetadata)
 
 	contractChaincode, err = CreateNewChaincode(new(ignorableFuncContract))
 	_, ok := contractChaincode.contracts["ignorableFuncContract"].functions["IgnoreMe"]
