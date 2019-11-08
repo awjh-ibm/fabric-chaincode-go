@@ -16,6 +16,7 @@ import (
 	"github.com/awjh-ibm/fabric-chaincode-go/contractapi/serializer"
 	"github.com/awjh-ibm/fabric-chaincode-go/shim"
 	"github.com/awjh-ibm/fabric-chaincode-go/shimtest"
+
 	"github.com/hyperledger/fabric-protos-go/peer"
 	"github.com/stretchr/testify/assert"
 )
@@ -320,11 +321,11 @@ func testCallingContractFunctions(t *testing.T, callType string) {
 
 type mockSerializer struct{}
 
-func (ms *mockSerializer) FromString(string, reflect.Type, *spec.Schema, *metadata.ComponentMetadata) (reflect.Value, error) {
+func (ms *mockSerializer) FromString(string, reflect.Type, *metadata.ParameterMetadata, *metadata.ComponentMetadata) (reflect.Value, error) {
 	return reflect.ValueOf("HELLO WORLD"), nil
 }
 
-func (ms *mockSerializer) ToString(reflect.Value, reflect.Type, *spec.Schema, *metadata.ComponentMetadata) (string, error) {
+func (ms *mockSerializer) ToString(reflect.Value, reflect.Type, *metadata.ReturnMetadata, *metadata.ComponentMetadata) (string, error) {
 	return "GOODBYE WORLD", nil
 }
 

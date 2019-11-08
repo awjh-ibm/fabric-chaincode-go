@@ -13,6 +13,7 @@ import (
 	metadata "github.com/awjh-ibm/fabric-chaincode-go/contractapi/metadata"
 	"github.com/awjh-ibm/fabric-chaincode-go/contractapi/serializer"
 	"github.com/stretchr/testify/assert"
+	"github.com/xeipuuv/gojsonschema"
 )
 
 // ================================
@@ -90,11 +91,11 @@ func (ss *simpleStruct) BadMethodSecondReturn(param1 string) (string, string) {
 
 type mockSerializer struct{}
 
-func (ms *mockSerializer) FromString(string, reflect.Type, *spec.Schema, *metadata.ComponentMetadata) (reflect.Value, error) {
+func (ms *mockSerializer) FromString(string, reflect.Type, *metadata.ParameterMetadata, *metadata.ComponentMetadata) (reflect.Value, error) {
 	return reflect.ValueOf("HELLO WORLD"), nil
 }
 
-func (ms *mockSerializer) ToString(reflect.Value, reflect.Type, *spec.Schema, *metadata.ComponentMetadata) (string, error) {
+func (ms *mockSerializer) ToString(reflect.Value, reflect.Type, *metadata.ReturnMetadata, *metadata.ComponentMetadata) (string, error) {
 	return "", errors.New("Serializer error")
 }
 
@@ -130,6 +131,19 @@ func testHandleResponse(t *testing.T, successReturn reflect.Type, errorReturn bo
 	assert.Equal(t, expectedString, strResp, "should have returned string value from response")
 	assert.Equal(t, expectedValue, valueResp, "should have returned actual value from response")
 	assert.Equal(t, expectedError, errResp, "should have returned error value from response")
+}
+
+func createGoJSONSchemaSchema(propName string, schema *spec.Schema, components *metadata.ComponentMetadata) *gojsonschema.Schema {
+	combined := make(map[string]interface{})
+	combined["components"] = components
+	combined["properties"] = make(map[string]interface{})
+	combined["properties"].(map[string]interface{})[propName] = schema
+
+	combinedLoader := gojsonschema.NewGoLoader(combined)
+
+	gjs, _ := gojsonschema.NewSchema(combinedLoader)
+
+	return gjs
 }
 
 // ================================
@@ -209,12 +223,14 @@ func TestFormatArgs(t *testing.T) {
 
 	supplementaryMetadata.Parameters = []metadata.ParameterMetadata{
 		metadata.ParameterMetadata{
-			Name:   "param1",
-			Schema: *(spec.Int64Property()),
+			Name:           "param1",
+			Schema:         spec.Int64Property(),
+			CompiledSchema: createGoJSONSchemaSchema("param1", spec.Int64Property(), nil),
 		},
 		metadata.ParameterMetadata{
-			Name:   "param2",
-			Schema: *(spec.Int64Property()),
+			Name:           "param2",
+			Schema:         spec.Int64Property(),
+			CompiledSchema: createGoJSONSchemaSchema("param1", spec.Int64Property(), nil),
 		},
 	}
 	args, err = fn.formatArgs(ctx, supplementaryMetadata.Parameters, nil, []string{"1", "2"}, serializer)
@@ -485,10 +501,10 @@ func TestReflectMetadata(t *testing.T) {
 	txMetadata = testCf.ReflectMetadata("some tx", nil)
 	expectedMetadata := metadata.TransactionMetadata{
 		Parameters: []metadata.ParameterMetadata{
-			metadata.ParameterMetadata{Name: "param0", Schema: *spec.StringProperty()},
-			metadata.ParameterMetadata{Name: "param1", Schema: *spec.BoolProperty()},
+			metadata.ParameterMetadata{Name: "param0", Schema: spec.StringProperty()},
+			metadata.ParameterMetadata{Name: "param1", Schema: spec.BoolProperty()},
 		},
-		Returns: spec.Int64Property(),
+		Returns: metadata.ReturnMetadata{Schema: spec.Int64Property()},
 		Tag:     []string{"submit"},
 		Name:    "some tx",
 	}
@@ -537,10 +553,10 @@ func TestCall(t *testing.T) {
 
 	schema := metadata.TransactionMetadata{}
 	schema.Parameters = []metadata.ParameterMetadata{
-		metadata.ParameterMetadata{Schema: *spec.StringProperty()},
-		metadata.ParameterMetadata{Schema: *spec.StringProperty()},
+		metadata.ParameterMetadata{Schema: spec.StringProperty()},
+		metadata.ParameterMetadata{Schema: spec.StringProperty()},
 	}
-	schema.Returns = spec.StringProperty()
+	schema.Returns = metadata.ReturnMetadata{Schema: spec.StringProperty()}
 	expectedStr, expectedIface, expectedErr = testCf.handleResponse([]reflect.Value{reflect.ValueOf("helloworld")}, nil, nil, serializer)
 	actualStr, actualIface, actualErr = testCf.Call(ctx, nil, nil, serializer, "hello", "world")
 	assert.Equal(t, actualErr, expectedErr, "should return same error as handle response for good function with schema")

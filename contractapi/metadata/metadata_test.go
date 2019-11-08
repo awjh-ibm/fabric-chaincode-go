@@ -6,6 +6,7 @@ package metadata
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/go-openapi/spec"
 	"github.com/stretchr/testify/assert"
+	"github.com/xeipuuv/gojsonschema"
 )
 
 // ================================
@@ -94,6 +96,26 @@ func TestGetJSONSchema(t *testing.T) {
 
 	assert.Nil(t, err, "should not error when getting schema")
 	assert.Equal(t, expectedSchema, schema, "should return same schema as in file. Have you updated schema without running packr?")
+}
+
+func TestUnmarshalJSON(t *testing.T) {
+	ttm := new(TransactionMetadata)
+
+	err := json.Unmarshal([]byte("{\"name\": 1}"), ttm)
+	assert.EqualError(t, err, "json: cannot unmarshal number into Go struct field jsonTransactionMetadata.name of type string", "should error on bad JSON")
+
+	err = json.Unmarshal([]byte("{\"name\":\"Transaction1\",\"returns\":{\"type\":\"string\"}}"), ttm)
+	assert.Nil(t, err, "should not error on valid json")
+	assert.Equal(t, &TransactionMetadata{Name: "Transaction1", Returns: ReturnMetadata{Schema: spec.StringProperty()}}, ttm, "should setup TransactionMetadata from json bytes")
+
+}
+
+func TestMarshalJSON(t *testing.T) {
+	ttm := TransactionMetadata{Name: "Transaction1", Returns: ReturnMetadata{Schema: spec.StringProperty()}}
+	bytes, err := json.Marshal(&ttm)
+
+	assert.Nil(t, err, "should not error on marshall")
+	assert.Equal(t, "{\"name\":\"Transaction1\",\"returns\":{\"type\":\"string\"}}", string(bytes), "should return JSON with returns as schema not object")
 }
 
 func TestAppend(t *testing.T) {
@@ -181,6 +203,86 @@ func TestAppend(t *testing.T) {
 
 	assert.Equal(t, ccmComponent, ccm.Components, "should have used own components")
 	assert.NotEqual(t, source.Components, ccm.Components, "should not be same as source components")
+}
+
+func TestCompileSchemas(t *testing.T) {
+	var err error
+
+	badReturn := ReturnMetadata{
+		Schema: spec.RefProperty("non-existant"),
+	}
+
+	badParameter := ParameterMetadata{
+		Name:   "badParam",
+		Schema: spec.RefProperty("non-existant"),
+	}
+
+	goodReturn := ReturnMetadata{
+		Schema: spec.Int64Property(),
+	}
+
+	goodParameter1 := ParameterMetadata{
+		Name:   "goodParam1",
+		Schema: spec.RefProperty("#/components/schemas/someComponent"),
+	}
+
+	goodParameter2 := ParameterMetadata{
+		Name:   "goodParam2",
+		Schema: spec.StringProperty(),
+	}
+
+	someComponent := ObjectMetadata{
+		Properties: make(map[string]spec.Schema),
+		Required:   []string{},
+	}
+	someTransaction := TransactionMetadata{
+		Name: "someTransaction",
+	}
+	someContract := ContractMetadata{
+		Transactions: []TransactionMetadata{someTransaction},
+	}
+
+	ccm := ContractChaincodeMetadata{}
+	ccm.Components = ComponentMetadata{}
+	ccm.Components.Schemas = make(map[string]ObjectMetadata)
+	ccm.Components.Schemas["someComponent"] = someComponent
+	ccm.Contracts = make(map[string]ContractMetadata)
+	ccm.Contracts["someContract"] = someContract
+
+	someTransaction.Returns = badReturn
+	someContract.Transactions[0] = someTransaction
+	ccm.Contracts["someContract"] = someContract
+	err = ccm.CompileSchemas()
+	assert.Contains(t, err.Error(), "Error compiling schema for someContract [someTransaction]. Return schema invalid.", "should error on bad schema for return value")
+
+	someTransaction.Parameters = []ParameterMetadata{badParameter}
+	someContract.Transactions[0] = someTransaction
+	ccm.Contracts["someContract"] = someContract
+	err = ccm.CompileSchemas()
+	assert.Contains(t, err.Error(), "Error compiling schema for someContract [someTransaction]. badParam schema invalid.", "should error on bad schema for param value")
+
+	someTransaction.Returns = goodReturn
+	someTransaction.Parameters = []ParameterMetadata{goodParameter1, goodParameter2}
+	someContract.Transactions[0] = someTransaction
+	ccm.Contracts["someContract"] = someContract
+	err = ccm.CompileSchemas()
+	assert.Nil(t, err, "should not error on good metadata")
+	validateCompiledSchema(t, "goodParam1", make(map[string]interface{}), ccm.Contracts["someContract"].Transactions[0].Parameters[0].CompiledSchema)
+	validateCompiledSchema(t, "goodParam2", "abc", ccm.Contracts["someContract"].Transactions[0].Parameters[1].CompiledSchema)
+	validateCompiledSchema(t, "return", 1, ccm.Contracts["someContract"].Transactions[0].Returns.CompiledSchema)
+}
+
+func validateCompiledSchema(t *testing.T, propName string, propValue interface{}, compiledSchema *gojsonschema.Schema) {
+	t.Helper()
+
+	returnValidator := make(map[string]interface{})
+	returnValidator["return"] = propValue
+
+	toValidateLoader := gojsonschema.NewGoLoader(returnValidator)
+
+	result, _ := compiledSchema.Validate(toValidateLoader)
+
+	assert.True(t, result.Valid(), fmt.Sprintf("should validate for %s compiled schema", propName))
 }
 
 func TestReadMetadataFile(t *testing.T) {

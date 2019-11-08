@@ -11,7 +11,7 @@ import (
 	"github.com/awjh-ibm/fabric-chaincode-go/contractapi/internal/types"
 	"github.com/awjh-ibm/fabric-chaincode-go/contractapi/internal/utils"
 	"github.com/awjh-ibm/fabric-chaincode-go/contractapi/metadata"
-	"github.com/go-openapi/spec"
+
 	"github.com/xeipuuv/gojsonschema"
 )
 
@@ -27,25 +27,25 @@ type JSONSerializer struct{}
 // you use either of these in your struct and expect data passed in to use these then you should write
 // your own unmarshall function to handle this for your struct.
 // Docs on how the Go JSON Unmarshaller works: https://golang.org/pkg/encoding/json/
-func (js *JSONSerializer) FromString(param string, fieldType reflect.Type, schema *spec.Schema, components *metadata.ComponentMetadata) (reflect.Value, error) {
+func (js *JSONSerializer) FromString(param string, fieldType reflect.Type, paramMetadata *metadata.ParameterMetadata, components *metadata.ComponentMetadata) (reflect.Value, error) {
 	converted, err := convertArg(fieldType, param)
 
 	if err != nil {
 		return reflect.Value{}, err
 	}
 
-	if schema != nil {
+	if paramMetadata != nil {
 		toValidate := make(map[string]interface{})
 
 		if fieldType.Kind() == reflect.Struct || (fieldType.Kind() == reflect.Ptr && fieldType.Elem().Kind() == reflect.Struct) {
 			structMap := make(map[string]interface{})
 			json.Unmarshal([]byte(param), &structMap) // use a map for structs as schema seems to like that
-			toValidate["prop"] = structMap
+			toValidate[paramMetadata.Name] = structMap
 		} else {
-			toValidate["prop"] = converted.Interface()
+			toValidate[paramMetadata.Name] = converted.Interface()
 		}
 
-		err := validateAgainstSchema(toValidate, schema, components)
+		err := validateAgainstSchema(toValidate, paramMetadata.CompiledSchema)
 
 		if err != nil {
 			return reflect.Value{}, err
@@ -62,7 +62,7 @@ func (js *JSONSerializer) FromString(param string, fieldType reflect.Type, schem
 // metadata) in the string or use the metadata tag value for the property name in the produced string by default. To
 // include these within the string whilst using this serializer you should write a custom Marshall function on your struct
 // Docs on how the Go JSON Marshaller works: https://golang.org/pkg/encoding/json/
-func (js *JSONSerializer) ToString(result reflect.Value, resultType reflect.Type, schema *spec.Schema, components *metadata.ComponentMetadata) (string, error) {
+func (js *JSONSerializer) ToString(result reflect.Value, resultType reflect.Type, returns *metadata.ReturnMetadata, components *metadata.ComponentMetadata) (string, error) {
 	var str string
 
 	if !isNillableType(result.Kind()) || !result.IsNil() {
@@ -73,18 +73,18 @@ func (js *JSONSerializer) ToString(result reflect.Value, resultType reflect.Type
 			str = fmt.Sprint(result.Interface())
 		}
 
-		if schema != nil {
+		if returns != nil {
 			toValidate := make(map[string]interface{})
 
 			if resultType.Kind() == reflect.Struct || (resultType.Kind() == reflect.Ptr && resultType.Elem().Kind() == reflect.Struct) {
 				structMap := make(map[string]interface{})
 				json.Unmarshal([]byte(str), &structMap) // use a map for structs as schema seems to like that
-				toValidate["prop"] = structMap
+				toValidate["return"] = structMap
 			} else {
-				toValidate["prop"] = result.Interface()
+				toValidate["return"] = result.Interface()
 			}
 
-			err := validateAgainstSchema(toValidate, schema, components)
+			err := validateAgainstSchema(toValidate, returns.CompiledSchema)
 
 			if err != nil {
 				return "", err
@@ -124,20 +124,8 @@ func convertArg(fieldType reflect.Type, paramValue string) (reflect.Value, error
 	return converted, nil
 }
 
-func validateAgainstSchema(toValidate map[string]interface{}, comparisonSchema *spec.Schema, components *metadata.ComponentMetadata) error {
-	combined := make(map[string]interface{})
-	combined["components"] = components
-	combined["properties"] = make(map[string]interface{})
-	combined["properties"].(map[string]interface{})["prop"] = comparisonSchema
-
-	combinedLoader := gojsonschema.NewGoLoader(combined)
+func validateAgainstSchema(toValidate map[string]interface{}, schema *gojsonschema.Schema) error {
 	toValidateLoader := gojsonschema.NewGoLoader(toValidate)
-
-	schema, err := gojsonschema.NewSchema(combinedLoader)
-
-	if err != nil {
-		return fmt.Errorf("Invalid schema for parameter: %s", err.Error())
-	}
 
 	result, _ := schema.Validate(toValidateLoader)
 

@@ -12,6 +12,7 @@ import (
 	"github.com/awjh-ibm/fabric-chaincode-go/contractapi/internal/types"
 	"github.com/awjh-ibm/fabric-chaincode-go/contractapi/metadata"
 	"github.com/stretchr/testify/assert"
+	"github.com/xeipuuv/gojsonschema"
 )
 
 // ================================
@@ -39,6 +40,19 @@ type usefulStruct struct {
 
 func (us usefulStruct) DoNothing() string {
 	return "nothing"
+}
+
+func createGoJSONSchemaSchema(propName string, schema *spec.Schema, components *metadata.ComponentMetadata) *gojsonschema.Schema {
+	combined := make(map[string]interface{})
+	combined["components"] = components
+	combined["properties"] = make(map[string]interface{})
+	combined["properties"].(map[string]interface{})[propName] = schema
+
+	combinedLoader := gojsonschema.NewGoLoader(combined)
+
+	gjs, _ := gojsonschema.NewSchema(combinedLoader)
+
+	return gjs
 }
 
 func testConvertArgsBasicType(t *testing.T, expected interface{}, str string) {
@@ -178,26 +192,21 @@ func TestConvertArg(t *testing.T) {
 
 func TestValidateAgainstSchema(t *testing.T) {
 	toValidate := make(map[string]interface{})
-	var comparisonSchema *spec.Schema
+	var comparisonSchema *gojsonschema.Schema
 	var err error
 
 	components := metadata.ComponentMetadata{}
 	components.Schemas = make(map[string]metadata.ObjectMetadata)
 	components.Schemas["simpleStruct"] = metadata.ObjectMetadata{}
 
-	toValidate["prop"] = "something"
-	comparisonSchema = spec.RefProperty("something that doesn't exist")
-	err = validateAgainstSchema(toValidate, comparisonSchema, &components)
-	assert.Contains(t, err.Error(), "Invalid schema for parameter", "should error when schema is bad")
-
 	toValidate["prop"] = -1
-	comparisonSchema = types.BasicTypes[reflect.Uint].GetSchema()
-	err = validateAgainstSchema(toValidate, comparisonSchema, &components)
+	comparisonSchema = createGoJSONSchemaSchema("prop", types.BasicTypes[reflect.Uint].GetSchema(), &components)
+	err = validateAgainstSchema(toValidate, comparisonSchema)
 	assert.Contains(t, err.Error(), "Value did not match schema", "should error when data doesnt match schema")
 
 	toValidate["prop"] = 10
-	comparisonSchema = types.BasicTypes[reflect.Uint].GetSchema()
-	err = validateAgainstSchema(toValidate, comparisonSchema, &components)
+	comparisonSchema = createGoJSONSchemaSchema("prop", types.BasicTypes[reflect.Uint].GetSchema(), &components)
+	err = validateAgainstSchema(toValidate, comparisonSchema)
 	assert.Nil(t, err, "should error when matches schema")
 }
 
@@ -206,6 +215,8 @@ func TestFromString(t *testing.T) {
 	var value reflect.Value
 	var expectedErr error
 	var schema *spec.Schema
+	var compiledSchema *gojsonschema.Schema
+	var paramMetadata metadata.ParameterMetadata
 	var toValidate map[string]interface{}
 
 	serializer := new(JSONSerializer)
@@ -218,10 +229,12 @@ func TestFromString(t *testing.T) {
 	float := float64(2)
 	schema = spec.Int64Property()
 	schema.Minimum = &float
-	value, err = serializer.FromString("1", reflect.TypeOf(1), schema, nil)
+	compiledSchema = createGoJSONSchemaSchema("param1", schema, nil)
+	paramMetadata = metadata.ParameterMetadata{Name: "param1", Schema: schema, CompiledSchema: compiledSchema}
+	value, err = serializer.FromString("1", reflect.TypeOf(1), &paramMetadata, nil)
 	toValidate = make(map[string]interface{})
-	toValidate["prop"] = 1
-	expectedErr = validateAgainstSchema(toValidate, schema, nil)
+	toValidate["param1"] = 1
+	expectedErr = validateAgainstSchema(toValidate, compiledSchema)
 	assert.EqualError(t, err, expectedErr.Error(), "should error when validateAgainstSchema errors")
 	assert.Equal(t, reflect.Value{}, value, "should return an empty reflect value when it errors due to validateAgainstSchema")
 
@@ -233,7 +246,9 @@ func TestFromString(t *testing.T) {
 	expectedStruct.Prop1 = "hello"
 	components := new(metadata.ComponentMetadata)
 	schema, _ = metadata.GetSchema(reflect.TypeOf(expectedStruct), components)
-	value, err = serializer.FromString("{\"prop1\":\"hello\"}", reflect.TypeOf(expectedStruct), schema, components)
+	compiledSchema = createGoJSONSchemaSchema("param1", schema, components)
+	paramMetadata = metadata.ParameterMetadata{Name: "param1", Schema: schema, CompiledSchema: compiledSchema}
+	value, err = serializer.FromString("{\"prop1\":\"hello\"}", reflect.TypeOf(expectedStruct), &paramMetadata, components)
 	assert.Nil(t, err, "should not error when convert args passes and schema passes")
 	assert.Equal(t, reflect.ValueOf(expectedStruct).Interface(), value.Interface(), "should reflect value for converted arg when arg and schema passes")
 }
@@ -243,6 +258,8 @@ func TestToString(t *testing.T) {
 	var value string
 	var expectedErr error
 	var schema *spec.Schema
+	var compiledSchema *gojsonschema.Schema
+	var returnMetadata metadata.ReturnMetadata
 	var toValidate map[string]interface{}
 
 	serializer := new(JSONSerializer)
@@ -265,10 +282,12 @@ func TestToString(t *testing.T) {
 	float := float64(2)
 	schema = spec.Int64Property()
 	schema.Minimum = &float
-	value, err = serializer.ToString(reflect.ValueOf(1), reflect.TypeOf(1), schema, nil)
+	compiledSchema = createGoJSONSchemaSchema("return", schema, nil)
+	returnMetadata = metadata.ReturnMetadata{Schema: schema, CompiledSchema: compiledSchema}
+	value, err = serializer.ToString(reflect.ValueOf(1), reflect.TypeOf(1), &returnMetadata, nil)
 	toValidate = make(map[string]interface{})
-	toValidate["prop"] = 1
-	expectedErr = validateAgainstSchema(toValidate, schema, nil)
+	toValidate["return"] = 1
+	expectedErr = validateAgainstSchema(toValidate, compiledSchema)
 	assert.EqualError(t, err, expectedErr.Error(), "should error when validateAgainstSchema errors")
 	assert.Equal(t, "", value, "should return an empty string value when it errors due to validateAgainstSchema")
 
@@ -276,7 +295,9 @@ func TestToString(t *testing.T) {
 	expectedStruct.Prop1 = "hello"
 	components := new(metadata.ComponentMetadata)
 	schema, _ = metadata.GetSchema(reflect.TypeOf(expectedStruct), components)
-	value, err = serializer.ToString(reflect.ValueOf(expectedStruct), reflect.TypeOf(expectedStruct), schema, components)
+	compiledSchema = createGoJSONSchemaSchema("return", schema, components)
+	returnMetadata = metadata.ReturnMetadata{Schema: schema, CompiledSchema: compiledSchema}
+	value, err = serializer.ToString(reflect.ValueOf(expectedStruct), reflect.TypeOf(expectedStruct), &returnMetadata, components)
 	assert.Nil(t, err, "should not error when making a string passes and schema passes")
 	assert.Equal(t, "{\"prop1\":\"hello\"}", value, "should return string value when schema passes")
 }

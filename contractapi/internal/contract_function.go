@@ -10,7 +10,6 @@ import (
 
 	metadata "github.com/awjh-ibm/fabric-chaincode-go/contractapi/metadata"
 	"github.com/awjh-ibm/fabric-chaincode-go/contractapi/serializer"
-	"github.com/go-openapi/spec"
 )
 
 type contractFunctionParams struct {
@@ -58,9 +57,9 @@ func (cf ContractFunction) Call(ctx reflect.Value, supplementaryMetadata *metada
 
 	someResp := cf.function.Call(values)
 
-	var returnsMetadata *spec.Schema
+	var returnsMetadata *metadata.ReturnMetadata
 	if supplementaryMetadata != nil {
-		returnsMetadata = supplementaryMetadata.Returns
+		returnsMetadata = &supplementaryMetadata.Returns
 	}
 
 	return cf.handleResponse(someResp, returnsMetadata, components, serializer)
@@ -85,7 +84,7 @@ func (cf ContractFunction) ReflectMetadata(name string, existingComponents *meta
 
 		param := metadata.ParameterMetadata{}
 		param.Name = fmt.Sprintf("param%d", index)
-		param.Schema = *schema
+		param.Schema = schema
 
 		transactionMetadata.Parameters = append(transactionMetadata.Parameters, param)
 	}
@@ -93,7 +92,7 @@ func (cf ContractFunction) ReflectMetadata(name string, existingComponents *meta
 	if cf.returns.success != nil {
 		schema, _ := metadata.GetSchema(cf.returns.success, existingComponents)
 
-		transactionMetadata.Returns = schema
+		transactionMetadata.Returns = metadata.ReturnMetadata{Schema: schema}
 	}
 
 	return transactionMetadata
@@ -130,17 +129,14 @@ func (cf *ContractFunction) formatArgs(ctx reflect.Value, supplementaryMetadata 
 
 		fieldType := cf.params.fields[i]
 
-		paramName := ""
-
-		var schema *spec.Schema
+		var paramMetadata *metadata.ParameterMetadata
 
 		if supplementaryMetadata != nil {
-			paramName = " " + supplementaryMetadata[i].Name
-			schema = &supplementaryMetadata[i].Schema
+			paramMetadata = &supplementaryMetadata[i]
 		}
 
 		c := make(chan formatArgResult)
-		go cf.formatArg(paramName, params[i], fieldType, schema, components, serializer, c)
+		go cf.formatArg(params[i], fieldType, paramMetadata, components, serializer, c)
 		channels = append(channels, c)
 	}
 
@@ -158,10 +154,16 @@ func (cf *ContractFunction) formatArgs(ctx reflect.Value, supplementaryMetadata 
 	return values, nil
 }
 
-func (cf *ContractFunction) formatArg(paramName string, param string, fieldType reflect.Type, schema *spec.Schema, components *metadata.ComponentMetadata, serializer serializer.TransactionSerializer, c chan formatArgResult) {
+func (cf *ContractFunction) formatArg(param string, fieldType reflect.Type, parameterMetadata *metadata.ParameterMetadata, components *metadata.ComponentMetadata, serializer serializer.TransactionSerializer, c chan formatArgResult) {
 	defer close(c)
 
-	converted, err := serializer.FromString(param, fieldType, schema, components)
+	converted, err := serializer.FromString(param, fieldType, parameterMetadata, components)
+
+	paramName := ""
+
+	if parameterMetadata != nil {
+		paramName = parameterMetadata.Name
+	}
 
 	res := new(formatArgResult)
 	res.paramName = paramName
@@ -171,7 +173,7 @@ func (cf *ContractFunction) formatArg(paramName string, param string, fieldType 
 	c <- *res
 }
 
-func (cf *ContractFunction) handleResponse(response []reflect.Value, supplementaryMetadata *spec.Schema, components *metadata.ComponentMetadata, serializer serializer.TransactionSerializer) (string, interface{}, error) {
+func (cf *ContractFunction) handleResponse(response []reflect.Value, returnsMetadata *metadata.ReturnMetadata, components *metadata.ComponentMetadata, serializer serializer.TransactionSerializer) (string, interface{}, error) {
 	expectedLength := 0
 
 	returnsSuccess := cf.returns.success != nil
@@ -203,7 +205,7 @@ func (cf *ContractFunction) handleResponse(response []reflect.Value, supplementa
 		if successResponse.IsValid() {
 			if serializer != nil {
 				var err error
-				successString, err = serializer.ToString(successResponse, cf.returns.success, supplementaryMetadata, components)
+				successString, err = serializer.ToString(successResponse, cf.returns.success, returnsMetadata, components)
 
 				if err != nil {
 					return "", nil, fmt.Errorf("Error handling success response. %s", err.Error())

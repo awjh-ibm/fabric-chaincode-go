@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"reflect"
 
-	"github.com/go-openapi/spec"
 	"github.com/awjh-ibm/fabric-chaincode-go/contractapi/internal/utils"
+	"github.com/go-openapi/spec"
 	"github.com/gobuffalo/packr"
 	"github.com/xeipuuv/gojsonschema"
 )
@@ -57,17 +57,55 @@ func GetJSONSchema() ([]byte, error) {
 
 // ParameterMetadata details about a parameter used for a transaction
 type ParameterMetadata struct {
-	Description string      `json:"description,omitempty"`
-	Name        string      `json:"name"`
-	Schema      spec.Schema `json:"schema"`
+	Description    string               `json:"description,omitempty"`
+	Name           string               `json:"name"`
+	Schema         *spec.Schema         `json:"schema"`
+	CompiledSchema *gojsonschema.Schema `json:"-"`
+}
+
+// ReturnMetadata details about the return type for a transaction
+type ReturnMetadata struct {
+	Schema         *spec.Schema
+	CompiledSchema *gojsonschema.Schema
 }
 
 // TransactionMetadata contains information on what makes up a transaction
 type TransactionMetadata struct {
 	Parameters []ParameterMetadata `json:"parameters,omitempty"`
-	Returns    *spec.Schema        `json:"returns,omitempty"`
+	Returns    ReturnMetadata      `json:"-"`
 	Tag        []string            `json:"tag,omitempty"`
 	Name       string              `json:"name"`
+}
+
+type tmAlias TransactionMetadata
+type jsonTransactionMetadata struct {
+	*tmAlias
+	ReturnsSchema *spec.Schema `json:"returns,omitempty"`
+}
+
+// UnmarshalJSON handles converting JSON to TransactionMetadata since returns is flattened
+// in swagger
+func (tm *TransactionMetadata) UnmarshalJSON(data []byte) error {
+	jtm := jsonTransactionMetadata{tmAlias: (*tmAlias)(tm)}
+
+	err := json.Unmarshal(data, &jtm)
+
+	if err != nil {
+		return err
+	}
+
+	tm.Returns = ReturnMetadata{}
+	tm.Returns.Schema = jtm.ReturnsSchema
+
+	return nil
+}
+
+// MarshalJSON handles converting TransactionMetadata to JSON since returns is flattened
+// in swagger
+func (tm *TransactionMetadata) MarshalJSON() ([]byte, error) {
+	jtm := jsonTransactionMetadata{tmAlias: (*tmAlias)(tm), ReturnsSchema: tm.Returns.Schema}
+
+	return json.Marshal(&jtm)
 }
 
 // ContractMetadata contains information about what makes up a contract
@@ -115,6 +153,53 @@ func (ccm *ContractChaincodeMetadata) Append(source ContractChaincodeMetadata) {
 	if reflect.DeepEqual(ccm.Components, ComponentMetadata{}) {
 		ccm.Components = source.Components
 	}
+}
+
+// CompileSchemas compile parameter and return schemas for use by gojsonschema.
+// When validating against the compiled schema you will need to make the
+// comparison json have a key of the parameter name for parameters or
+// return for return values e.g {"param1": "value"}
+func (ccm *ContractChaincodeMetadata) CompileSchemas() error {
+	compileSchema := func(propName string, schema *spec.Schema, components ComponentMetadata) (*gojsonschema.Schema, error) {
+		combined := make(map[string]interface{})
+		combined["components"] = components
+		combined["properties"] = make(map[string]interface{})
+		combined["properties"].(map[string]interface{})[propName] = schema
+
+		combinedLoader := gojsonschema.NewGoLoader(combined)
+
+		return gojsonschema.NewSchema(combinedLoader)
+	}
+
+	for contractName, contract := range ccm.Contracts {
+		for txIdx, tx := range contract.Transactions {
+			for paramIdx, param := range tx.Parameters {
+				gjsSchema, err := compileSchema(param.Name, param.Schema, ccm.Components)
+
+				if err != nil {
+					return fmt.Errorf("Error compiling schema for %s [%s]. %s schema invalid. %s", contractName, tx.Name, param.Name, err.Error())
+				}
+
+				param.CompiledSchema = gjsSchema
+				tx.Parameters[paramIdx] = param
+			}
+
+			if tx.Returns.Schema != nil {
+				gjsSchema, err := compileSchema("return", tx.Returns.Schema, ccm.Components)
+
+				if err != nil {
+					return fmt.Errorf("Error compiling schema for %s [%s]. Return schema invalid. %s", contractName, tx.Name, err.Error())
+				}
+
+				tx.Returns.CompiledSchema = gjsSchema
+			}
+
+			contract.Transactions[txIdx] = tx
+		}
+		ccm.Contracts[contractName] = contract
+	}
+
+	return nil
 }
 
 // ReadMetadataFile return the contents of metadata file as ContractChaincodeMetadata

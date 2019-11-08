@@ -6,7 +6,6 @@ package serializer
 import (
 	"reflect"
 
-	"github.com/go-openapi/spec"
 	"github.com/awjh-ibm/fabric-chaincode-go/contractapi/metadata"
 )
 
@@ -20,11 +19,11 @@ type TransactionSerializer interface {
 	// adhere to and components which the schema may point to as a reference. The schema and
 	// component metadata may be nil. The function should produce a reflect value which matches
 	// the goal type.
-	FromString(string, reflect.Type, *spec.Schema, *metadata.ComponentMetadata) (reflect.Value, error)
+	FromString(string, reflect.Type, *metadata.ParameterMetadata, *metadata.ComponentMetadata) (reflect.Value, error)
 
 	// ToString receives a reflected value of a value, the reflected type of that that value was
 	// originally, the schema defining the rules of what that value should meet and components
 	// which the schema may point to as a reference. The schema and component metadata may be nil
 	// The function should produce a string which represents the original value
-	ToString(reflect.Value, reflect.Type, *spec.Schema, *metadata.ComponentMetadata) (string, error)
+	ToString(reflect.Value, reflect.Type, *metadata.ReturnMetadata, *metadata.ComponentMetadata) (string, error)
 }
